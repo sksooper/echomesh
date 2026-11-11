@@ -22,5 +22,14 @@ services:
       - ./backend:/app        # kod z dysku -> kontener (hot reload)
       - /app/node_modules     # node_modules zostają te z obrazu
 
+  frontend:
+    build: ./frontend
+    env_file: .env
+    ports: ["5173:5173"]
+    depends_on: [backend]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
 volumes:
   pgdata:
