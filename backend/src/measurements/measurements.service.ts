@@ -25,4 +25,20 @@ export class MeasurementsService {
     );
     return row;
   }
+
+  /** Historia odczytów czujnika z ostatnich `hours` godzin (rosnąco po czasie, max 5000 punktów). */
+  history(sensorId: number, hours: number) {
+    // podzapytanie bierze NAJNOWSZE 5000 wierszy, zewnętrzne ORDER BY układa je chronologicznie
+    return this.db.query(
+      `SELECT * FROM (
+         SELECT db_level::float8 AS "dbLevel", "timestamp"
+         FROM measurements
+         WHERE sensor_id = $1 AND "timestamp" > now() - make_interval(hours => $2::int)
+         ORDER BY "timestamp" DESC
+         LIMIT 5000
+       ) t
+       ORDER BY "timestamp"`,
+      [sensorId, hours],
+    );
+  }
 }
