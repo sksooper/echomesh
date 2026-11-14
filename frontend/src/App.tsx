@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
-import { getHealth, getSensors, Health, Sensor } from './api';
+import { AlertItem, getAlerts, getHealth, getSensors, Health, Sensor } from './api';
+import EventFeed from './components/EventFeed';
 import SensorList from './components/SensorList';
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
-    // dwa zapytania równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
+    // trzy zapytania równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
     const load = () =>
-      Promise.all([getHealth(), getSensors()])
-        .then(([h, s]) => {
+      Promise.all([getHealth(), getSensors(), getAlerts({ hours: 24 })])
+        .then(([h, s, a]) => {
           setHealth(h);
           setSensors(s);
+          setAlerts(a);
           setOffline(false);
         })
         .catch(() => setOffline(true));
@@ -48,10 +51,13 @@ export default function App() {
           )}
         </section>
 
-        <section>
-          <h2 className="mb-3 font-medium">Czujniki</h2>
-          <SensorList sensors={sensors} />
-        </section>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <section>
+            <h2 className="mb-3 font-medium">Czujniki</h2>
+            <SensorList sensors={sensors} />
+          </section>
+          <EventFeed alerts={alerts} />
+        </div>
       </main>
     </div>
   );
