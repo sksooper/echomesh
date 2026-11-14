@@ -12,6 +12,10 @@ export interface AlertItem {
   createdAt: Date;
 }
 
+// Próg alertu i minimalny odstęp między alertami tego samego czujnika (ochrona przed zalewem alertów)
+const THRESHOLD_DB = Number(process.env.ALERT_THRESHOLD_DB ?? 75);
+const COOLDOWN_SECONDS = Number(process.env.ALERT_COOLDOWN_SECONDS ?? 60);
+
 @Injectable()
 export class AlertsService {
   constructor(private db: DbService) {}
@@ -47,5 +51,28 @@ export class AlertsService {
        LIMIT $${params.length}`,
       params,
     );
+  }
+
+  /**
+   * Sprawdza normy dla nowego pomiaru. Zwraca true, jeśli powstał alert.
+   * INSERT ... SELECT ... WHERE NOT EXISTS to jedno zapytanie: sprawdzenie "czy był niedawno alert"
+   * i zapis dzieją się razem, więc dwa równoległe pomiary rzadko utworzą duplikat.
+   */
+  async checkNorms(sensorId: number, level: number): Promise<boolean> {
+    if (level < THRESHOLD_DB) return false;
+
+    const rows = await this.db.query(
+      `INSERT INTO alerts (sensor_id, level, description, source)
+       SELECT $1::int, $2::numeric, $3::text, 'measurement'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM alerts
+         WHERE sensor_id = $1::int
+           AND source = 'measurement'
+           AND created_at > now() - make_interval(secs => $4::float8)
+       )
+       RETURNING id`,
+      [sensorId, level, `Przekroczono próg ${THRESHOLD_DB} dB: ${level.toFixed(1)} dB`, COOLDOWN_SECONDS],
+    );
+    return rows.length > 0;
   }
 }
