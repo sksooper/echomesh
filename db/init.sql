@@ -39,6 +39,9 @@ CREATE TABLE alerts (
   sensor_id   INT NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
   level       NUMERIC(5,2),
   description TEXT NOT NULL,
+  -- skąd alert: z pomiaru czujnika czy ze zgłoszenia mieszkańca (dojdzie w module chatbota)
+  source      VARCHAR(20) NOT NULL DEFAULT 'measurement'
+              CHECK (source IN ('measurement', 'report')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX alerts_created_idx ON alerts (created_at DESC);
@@ -78,3 +81,11 @@ INSERT INTO city_events (title, start_time, end_time, geometry) VALUES
      ST_SetSRID(ST_MakePoint(17.0300, 51.1045), 4326)),
   ('Festiwal przy Hali Stulecia', now() + interval '1 day',   now() + interval '1 day 6 hours',
      ST_SetSRID(ST_MakePoint(17.0770, 51.1068), 4326));
+
+-- kilka alertów demonstracyjnych z historycznych pomiarów powyżej progu 75 dB
+INSERT INTO alerts (sensor_id, level, description, source, created_at)
+SELECT sensor_id, db_level, 'Przekroczono próg 75 dB: ' || round(db_level, 1)::text || ' dB', 'measurement', "timestamp"
+FROM measurements
+WHERE db_level > 75
+ORDER BY "timestamp" DESC
+LIMIT 8;
