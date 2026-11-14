@@ -19,6 +19,18 @@ export type Sensor = {
   stale: boolean; // odczyt nieaktualny (> 60 min) lub brak
 };
 
+export type AlertItem = {
+  id: number;
+  sensorId: number;
+  sensorName: string;
+  level: number | null;
+  description: string;
+  source: 'measurement' | 'report';
+  createdAt: string; // ISO
+};
+
+export type AlertQuery = { hours?: number; minDb?: number; sensorId?: number; limit?: number };
+
 /** Jedno miejsce na fetch + obsługę błędów HTTP — kolejne endpointy będą z niego korzystać. */
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -28,3 +40,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getHealth = () => req<Health>('/health');
 export const getSensors = () => req<Sensor[]>('/sensors');
+
+export function getAlerts(q: AlertQuery = {}) {
+  const params = new URLSearchParams();
+  // pomijamy nieustawione filtry, żeby nie wysyłać "minDb=undefined"
+  Object.entries(q).forEach(([k, v]) => v !== undefined && params.set(k, String(v)));
+  return req<AlertItem[]>(`/alerts?${params}`);
+}
