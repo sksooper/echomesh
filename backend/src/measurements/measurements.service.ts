@@ -1,10 +1,14 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { AlertsService } from '../alerts/alerts.service';
 import { DbService } from '../db/db.service';
 import { CreateMeasurementDto } from './measurements.dto';
 
 @Injectable()
 export class MeasurementsService {
-  constructor(private db: DbService) {}
+  constructor(
+    private db: DbService,
+    private alerts: AlertsService,
+  ) {}
 
   async create(dto: CreateMeasurementDto) {
     // 1. czujnik musi istnieć i być aktywny
@@ -23,7 +27,10 @@ export class MeasurementsService {
        RETURNING sensor_id AS "sensorId", db_level::float8 AS "dbLevel", "timestamp"`,
       [dto.sensorId, dto.dbLevel],
     );
-    return row;
+
+    // 3. sprawdzenie norm — jeśli próg przekroczony (i minął cooldown), powstaje alert
+    const alertCreated = await this.alerts.checkNorms(dto.sensorId, dto.dbLevel);
+    return { ...row, alertCreated };
   }
 
   /** Historia odczytów czujnika z ostatnich `hours` godzin (rosnąco po czasie, max 5000 punktów). */
