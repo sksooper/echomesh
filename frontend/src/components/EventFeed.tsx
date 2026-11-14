@@ -2,10 +2,54 @@ import type { AlertItem } from '../api';
 import { severity } from '../lib/alerts';
 import { timeAgo } from '../lib/time';
 
-export default function EventFeed({ alerts }: { alerts: AlertItem[] }) {
+const HOURS = [
+  { value: 1, label: '1 h' },
+  { value: 6, label: '6 h' },
+  { value: 24, label: '24 h' },
+  { value: 72, label: '3 dni' },
+];
+const MIN_DB = [
+  { value: 0, label: 'wszystkie' },
+  { value: 75, label: '≥ 75 dB' },
+  { value: 85, label: '≥ 85 dB' },
+];
+
+type Props = {
+  alerts: AlertItem[];
+  hours: number;
+  minDb: number;
+  onChange: (f: { hours: number; minDb: number }) => void;
+};
+
+export default function EventFeed({ alerts, hours, minDb, onChange }: Props) {
+  const select = 'rounded border border-slate-300 bg-white px-2 py-1 text-sm';
+
   return (
     <section className="rounded-lg bg-white p-4 shadow">
       <h2 className="mb-3 whitespace-nowrap font-medium">Strumień zdarzeń</h2>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3 whitespace-nowrap text-sm text-slate-600">
+        <label className="flex items-center gap-2">
+          Zakres
+          <select className={select} value={hours} onChange={(e) => onChange({ hours: Number(e.target.value), minDb })}>
+            {HOURS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          Próg
+          <select className={select} value={minDb} onChange={(e) => onChange({ hours, minDb: Number(e.target.value) })}>
+            {MIN_DB.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {alerts.length === 0 ? (
         <p className="text-sm text-slate-500">Brak alertów w wybranym zakresie.</p>
