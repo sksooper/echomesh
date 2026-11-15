@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Sensor } from '../api';
+import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { timeAgo } from '../lib/time';
 
@@ -31,6 +32,7 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const groupRef = useRef<L.LayerGroup | null>(null);
+  const heatRef = useRef<L.ImageOverlay | null>(null);
   // id czujnika -> znacznik + "sygnatura" wyglądu (żeby nie podmieniać ikony, gdy nic się nie zmieniło)
   const markers = useRef(new Map<number, { marker: L.Marker; sig: string }>());
   // znaczniki powstają raz, więc handler kliknięcia czyta AKTUALNĄ funkcję z ref-a (inaczej zostałaby stara)
@@ -51,6 +53,7 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
       map.remove();
       mapRef.current = null;
       groupRef.current = null;
+      heatRef.current = null;
       markers.current.clear();
     };
   }, []);
@@ -91,7 +94,25 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
     }
   }, [sensors, selectedId]);
 
-  // 3) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
+  // 3) termiczna mapa hałasu: obraz rysowany z modelu IDW i nakładany na mapę (ImageOverlay)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const heat = renderHeat(sensors);
+    if (!heat) {
+      heatRef.current?.remove();
+      heatRef.current = null;
+      return;
+    }
+    if (heatRef.current) {
+      heatRef.current.setUrl(heat.url);
+      heatRef.current.setBounds(L.latLngBounds(heat.bounds));
+    } else {
+      heatRef.current = L.imageOverlay(heat.url, heat.bounds, { opacity: 0.6, interactive: false }).addTo(map);
+    }
+  }, [sensors]);
+
+  // 4) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
   useEffect(() => {
     const map = mapRef.current;
     const s = sensors.find((x) => x.id === selectedId);
