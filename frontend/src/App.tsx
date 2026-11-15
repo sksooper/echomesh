@@ -55,7 +55,7 @@ export default function App() {
         </section>
 
         <section className="h-[28rem] overflow-hidden rounded-lg shadow">
-          <NoiseMap />
+          <NoiseMap sensors={sensors} />
         </section>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem]">
