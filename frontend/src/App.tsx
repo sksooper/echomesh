@@ -4,11 +4,18 @@ import EventFeed from './components/EventFeed';
 import NoiseMap from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
+type Tab = 'feed' | 'sensors';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'feed', label: 'Strumień' },
+  { id: 'sensors', label: 'Czujniki' },
+];
+
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [offline, setOffline] = useState(false);
+  const [tab, setTab] = useState<Tab>('feed');
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
@@ -29,42 +36,56 @@ export default function App() {
     return () => clearInterval(id);
   }, [filters]); // zmiana filtrów uruchamia efekt ponownie (nowy timer i natychmiastowe odświeżenie)
 
-  const row = (label: string, ok: boolean, text: string) => (
-    <div className="flex items-center justify-between gap-6 whitespace-nowrap py-2">
-      <span className="text-slate-600">{label}</span>
-      <span className={ok ? 'font-medium text-green-600' : 'font-medium text-red-600'}>{text}</span>
-    </div>
-  );
+  // Stan systemu w nagłówku — bez technicznych szczegółów (wersje PostGIS itp. zostają w /health)
+  const ok = !offline && health?.db.up === true;
+  const statusText = offline
+    ? 'Brak połączenia z serwerem'
+    : health && !health.db.up
+      ? 'Problem z bazą danych'
+      : health
+        ? 'System działa'
+        : 'Łączenie…';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b bg-white px-6 py-3">
-        <span className="text-xl font-semibold">EchoMesh</span>
+    <div className="flex h-screen flex-col bg-slate-50 text-slate-900">
+      <header className="flex items-center justify-between gap-4 border-b bg-white px-6 py-3">
+        <span className="whitespace-nowrap text-xl font-semibold">EchoMesh</span>
+        <span className="flex items-center gap-2 whitespace-nowrap text-sm text-slate-600">
+          <span className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
+          {statusText}
+        </span>
       </header>
-      <main className="space-y-8 p-6">
-        <section className="max-w-md divide-y rounded-lg bg-white p-4 shadow">
-          <h2 className="pb-2 font-medium">Stan systemu</h2>
-          {row('Backend (API)', !offline && !!health, offline ? 'brak połączenia' : health ? 'działa' : 'sprawdzam…')}
-          {row('Baza danych', !!health?.db.up, health ? (health.db.up ? 'połączona' : 'niedostępna') : '—')}
-          {health?.db.up && (
-            <div className="space-y-1 py-2 text-sm text-slate-500">
-              <div>PostGIS: {health.db.postgis}</div>
-              <div>pgRouting: {health.db.pgrouting ?? 'brak'}</div>
-            </div>
-          )}
-        </section>
 
-        <section className="h-[28rem] overflow-hidden rounded-lg shadow">
+      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* mapa zajmuje całą dostępną przestrzeń */}
+        <div className="relative min-h-[20rem] flex-1">
           <NoiseMap sensors={sensors} />
-        </section>
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          <section>
-            <h2 className="mb-3 font-medium">Czujniki</h2>
-            <SensorList sensors={sensors} />
-          </section>
-          <EventFeed alerts={alerts} hours={filters.hours} minDb={filters.minDb} onChange={setFilters} />
         </div>
+
+        {/* panel boczny z zakładkami */}
+        <aside className="flex min-h-0 w-full flex-col border-t bg-white lg:w-96 lg:border-l lg:border-t-0">
+          <nav className="flex border-b">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`whitespace-nowrap px-4 py-2 text-sm font-medium ${
+                  tab === t.id ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {tab === 'feed' ? (
+              <EventFeed alerts={alerts} hours={filters.hours} minDb={filters.minDb} onChange={setFilters} />
+            ) : (
+              <SensorList sensors={sensors} />
+            )}
+          </div>
+        </aside>
       </main>
     </div>
   );

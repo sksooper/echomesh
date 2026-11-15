@@ -12,7 +12,7 @@ export default function SensorList({ sensors }: { sensors: Sensor[] }) {
   if (sensors.length === 0) return <p className="text-slate-500">Brak czujników.</p>;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3">
       {sensors.map((s) => {
         const band = noiseBand(s.dbLevel, s.stale);
         return (

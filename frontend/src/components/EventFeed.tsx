@@ -25,9 +25,7 @@ export default function EventFeed({ alerts, hours, minDb, onChange }: Props) {
   const select = 'rounded border border-slate-300 bg-white px-2 py-1 text-sm';
 
   return (
-    <section className="rounded-lg bg-white p-4 shadow">
-      <h2 className="mb-3 whitespace-nowrap font-medium">Strumień zdarzeń</h2>
-
+    <section>
       <div className="mb-3 flex flex-wrap items-center gap-3 whitespace-nowrap text-sm text-slate-600">
         <label className="flex items-center gap-2">
           Zakres
@@ -54,7 +52,7 @@ export default function EventFeed({ alerts, hours, minDb, onChange }: Props) {
       {alerts.length === 0 ? (
         <p className="text-sm text-slate-500">Brak alertów w wybranym zakresie.</p>
       ) : (
-        <ul className="max-h-[32rem] divide-y overflow-y-auto">
+        <ul className="divide-y">
           {alerts.map((a) => {
             const sev = severity(a.level);
             return (
