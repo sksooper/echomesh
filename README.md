@@ -58,3 +58,9 @@ bash scripts/simulate.sh                      # Linux / macOS / Git Bash
 SENSORS="1 3" INTERVAL=5 bash scripts/simulate.sh
 ```
 Karty czujników na stronie głównej odświeżają się co 5 s. Odczyt starszy niż 60 min jest szary (nieaktualny).
+
+## Mapa i model hałasu (frontend)
+- Mapa: Leaflet + kafelki OpenStreetMap (© autorzy OpenStreetMap, ODbL). Znaczniki czujników mają kolor wg poziomu dB i pulsują, gdy odczyt jest świeży; szary = brak odczytu lub starszy niż 60 min.
+- Kliknięcie czujnika na mapie lub na liście zaznacza go po obu stronach i przesuwa mapę.
+- Mapa termiczna: obraz rysowany na `<canvas>` z modelu IDW — `idw = Σ(dB/d²) / Σ(1/d²)` — zmieszanego z tłem 50 dB; wpływ czujnika wygasa płynnie do 1500 m (`lib/noise-model.ts`, `lib/heatmap.ts`).
+- Warstwy (czujniki / mapa termiczna) można wyłączać w prawym górnym rogu mapy; legenda jest w lewym dolnym rogu.
