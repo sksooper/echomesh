@@ -11,6 +11,7 @@
   border-radius: 9999px;
 }
 .sensor-dot { border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.sensor-selected .sensor-dot { outline: 3px solid #0f172a; } /* ramka wybranego czujnika */
 /* pulsujący pierścień = czujnik "na żywo" (kolor przekazany zmienną --c) */
 .sensor-pulse { background: var(--c); opacity: 0.6; animation: sensor-pulse 1.8s ease-out infinite; }
 .sensor-stale .sensor-pulse { display: none; } /* nieaktualny odczyt nie pulsuje */

@@ -16,6 +16,7 @@ export default function App() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
@@ -35,6 +36,12 @@ export default function App() {
     // funkcja sprzątająca: zatrzymuje timer przy odmontowaniu komponentu
     return () => clearInterval(id);
   }, [filters]); // zmiana filtrów uruchamia efekt ponownie (nowy timer i natychmiastowe odświeżenie)
+
+  // wybór czujnika (kliknięcie na mapie lub na liście) pokazuje zakładkę z czujnikami
+  const selectSensor = (id: number) => {
+    setSelectedId(id);
+    setTab('sensors');
+  };
 
   // Stan systemu w nagłówku — bez technicznych szczegółów (wersje PostGIS itp. zostają w /health)
   const ok = !offline && health?.db.up === true;
@@ -59,7 +66,7 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* mapa zajmuje całą dostępną przestrzeń */}
         <div className="relative min-h-[20rem] flex-1">
-          <NoiseMap sensors={sensors} />
+          <NoiseMap sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />
         </div>
 
         {/* panel boczny z zakładkami */}
@@ -82,7 +89,7 @@ export default function App() {
             {tab === 'feed' ? (
               <EventFeed alerts={alerts} hours={filters.hours} minDb={filters.minDb} onChange={setFilters} />
             ) : (
-              <SensorList sensors={sensors} />
+              <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />
             )}
           </div>
         </aside>
