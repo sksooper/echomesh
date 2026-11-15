@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertItem, getAlerts, getHealth, getSensors, Health, Sensor } from './api';
 import EventFeed from './components/EventFeed';
+import NoiseMap from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
 export default function App() {
@@ -51,6 +52,10 @@ export default function App() {
               <div>pgRouting: {health.db.pgrouting ?? 'brak'}</div>
             </div>
           )}
+        </section>
+
+        <section className="h-[28rem] overflow-hidden rounded-lg shadow">
+          <NoiseMap />
         </section>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem]">
