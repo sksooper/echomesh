@@ -6,6 +6,8 @@ import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { timeAgo } from '../lib/time';
 
+export type Layers = { sensors: boolean; heat: boolean };
+
 const WROCLAW: L.LatLngTuple = [51.1079, 17.0385];
 const TOOLTIP = { direction: 'top' as const, offset: [0, -10] as L.PointTuple };
 
@@ -26,9 +28,14 @@ function tooltip(s: Sensor) {
   return el;
 }
 
-type Props = { sensors: Sensor[]; selectedId: number | null; onSelect: (id: number) => void };
+type Props = {
+  sensors: Sensor[];
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+  layers: Layers;
+};
 
-export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
+export default function NoiseMap({ sensors, selectedId, onSelect, layers }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const groupRef = useRef<L.LayerGroup | null>(null);
@@ -98,7 +105,7 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const heat = renderHeat(sensors);
+    const heat = layers.heat ? renderHeat(sensors) : null; // warstwa wyłączona = usuwamy nakładkę
     if (!heat) {
       heatRef.current?.remove();
       heatRef.current = null;
@@ -110,9 +117,18 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
     } else {
       heatRef.current = L.imageOverlay(heat.url, heat.bounds, { opacity: 0.6, interactive: false }).addTo(map);
     }
-  }, [sensors]);
+  }, [sensors, layers.heat]);
 
-  // 4) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
+  // 4) przełącznik warstwy czujników: pokazujemy / chowamy całą grupę znaczników
+  useEffect(() => {
+    const map = mapRef.current;
+    const group = groupRef.current;
+    if (!map || !group) return;
+    if (layers.sensors) group.addTo(map);
+    else group.remove();
+  }, [layers.sensors]);
+
+  // 5) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
   useEffect(() => {
     const map = mapRef.current;
     const s = sensors.find((x) => x.id === selectedId);
@@ -121,5 +137,6 @@ export default function NoiseMap({ sensors, selectedId, onSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  return <div ref={el} className="h-full w-full" />;
+  // isolate: z-index warstw Leaflet nie wychodzi poza mapę, więc legenda (z-10) zawsze jest nad nią
+  return <div ref={el} className="isolate h-full w-full" />;
 }

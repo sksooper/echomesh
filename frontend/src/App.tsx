@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AlertItem, getAlerts, getHealth, getSensors, Health, Sensor } from './api';
 import EventFeed from './components/EventFeed';
-import NoiseMap from './components/NoiseMap';
+import MapOverlay from './components/MapOverlay';
+import NoiseMap, { Layers } from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
 type Tab = 'feed' | 'sensors';
@@ -17,6 +18,7 @@ export default function App() {
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
@@ -66,7 +68,8 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* mapa zajmuje całą dostępną przestrzeń */}
         <div className="relative min-h-[20rem] flex-1">
-          <NoiseMap sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />
+          <NoiseMap sensors={sensors} selectedId={selectedId} onSelect={selectSensor} layers={layers} />
+          <MapOverlay layers={layers} onChange={setLayers} />
         </div>
 
         {/* panel boczny z zakładkami */}
