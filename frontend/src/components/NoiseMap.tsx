@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Sensor } from '../api';
+import type { CityEvent, Sensor } from '../api';
 import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
-import { timeAgo } from '../lib/time';
+import { formatRange, timeAgo } from '../lib/time';
 
 export type Layers = { sensors: boolean; heat: boolean };
 
@@ -28,18 +28,37 @@ function tooltip(s: Sensor) {
   return el;
 }
 
+// Styl stref wydarzeń: trwające = fiolet, pełna linia; zaplanowane = szary, przerywana linia
+const EVENT_ACTIVE: L.CircleMarkerOptions = { color: '#7c3aed', weight: 2, fillColor: '#7c3aed', fillOpacity: 0.12 };
+const EVENT_UPCOMING: L.CircleMarkerOptions = {
+  color: '#64748b',
+  weight: 2,
+  dashArray: '6 6',
+  fillColor: '#64748b',
+  fillOpacity: 0.06,
+};
+
+function eventTooltip(e: CityEvent) {
+  const el = document.createElement('div');
+  el.textContent = `${e.title} · ${e.active ? 'trwa' : 'zaplanowane'} · ${formatRange(e.startTime, e.endTime)}`;
+  return el;
+}
+
 type Props = {
   sensors: Sensor[];
+  events: CityEvent[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   layers: Layers;
 };
 
-export default function NoiseMap({ sensors, selectedId, onSelect, layers }: Props) {
+export default function NoiseMap({ sensors, events, selectedId, onSelect, layers }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const groupRef = useRef<L.LayerGroup | null>(null);
   const heatRef = useRef<L.ImageOverlay | null>(null);
+  const eventGroupRef = useRef<L.LayerGroup | null>(null);
+  const eventsKey = useRef(''); // odcisk ostatnio narysowanych wydarzeń — bez zmian nie rysujemy ich od nowa
   // id czujnika -> znacznik + "sygnatura" wyglądu (żeby nie podmieniać ikony, gdy nic się nie zmieniło)
   const markers = useRef(new Map<number, { marker: L.Marker; sig: string }>());
   // znaczniki powstają raz, więc handler kliknięcia czyta AKTUALNĄ funkcję z ref-a (inaczej zostałaby stara)
@@ -54,6 +73,7 @@ export default function NoiseMap({ sensors, selectedId, onSelect, layers }: Prop
       attribution: '© autorzy <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
     groupRef.current = L.layerGroup().addTo(map);
+    eventGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
     return () => {
@@ -61,6 +81,8 @@ export default function NoiseMap({ sensors, selectedId, onSelect, layers }: Prop
       mapRef.current = null;
       groupRef.current = null;
       heatRef.current = null;
+      eventGroupRef.current = null;
+      eventsKey.current = ''; // po ponownym zamontowaniu (React StrictMode) strefy muszą się narysować na nowo
       markers.current.clear();
     };
   }, []);
@@ -127,6 +149,22 @@ export default function NoiseMap({ sensors, selectedId, onSelect, layers }: Prop
     if (layers.sensors) group.addTo(map);
     else group.remove();
   }, [layers.sensors]);
+
+  // 4b) strefy wydarzeń miejskich: koła o promieniu strefy (w metrach — Leaflet skaluje je z mapą)
+  useEffect(() => {
+    const group = eventGroupRef.current;
+    if (!group) return;
+    const key = events.map((e) => `${e.id}|${e.title}|${e.active}|${e.lat}|${e.lng}|${e.radiusM}`).join(';');
+    if (key === eventsKey.current) return;
+    eventsKey.current = key;
+
+    group.clearLayers();
+    for (const e of events) {
+      L.circle([e.lat, e.lng], { radius: e.radiusM, ...(e.active ? EVENT_ACTIVE : EVENT_UPCOMING) })
+        .bindTooltip(eventTooltip(e), { sticky: true })
+        .addTo(group);
+    }
+  }, [events]);
 
   // 5) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
   useEffect(() => {

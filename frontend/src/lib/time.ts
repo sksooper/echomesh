@@ -8,3 +8,15 @@ export function timeAgo(iso: string | null): string {
   if (sec < 86400) return `${Math.floor(sec / 3600)} h temu`;
   return `${Math.floor(sec / 86400)} d temu`;
 }
+
+const RANGE_FORMAT = new Intl.DateTimeFormat('pl-PL', {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** "20.11, 18:00 – 20.11, 22:00" — czas trwania wydarzenia w lokalnej strefie przeglądarki. */
+export function formatRange(startIso: string, endIso: string): string {
+  return `${RANGE_FORMAT.format(new Date(startIso))} – ${RANGE_FORMAT.format(new Date(endIso))}`;
+}

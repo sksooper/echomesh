@@ -31,6 +31,17 @@ export type AlertItem = {
 
 export type AlertQuery = { hours?: number; minDb?: number; sensorId?: number; limit?: number };
 
+export type CityEvent = {
+  id: number;
+  title: string;
+  startTime: string; // ISO
+  endTime: string; // ISO
+  lat: number;
+  lng: number;
+  radiusM: number; // promień strefy wydarzenia
+  active: boolean; // czy trwa w tej chwili
+};
+
 /** Jedno miejsce na fetch + obsługę błędów HTTP — kolejne endpointy będą z niego korzystać. */
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -47,3 +58,6 @@ export function getAlerts(q: AlertQuery = {}) {
   Object.entries(q).forEach(([k, v]) => v !== undefined && params.set(k, String(v)));
   return req<AlertItem[]>(`/alerts?${params}`);
 }
+
+// domyślnie backend zwraca trwające i zaplanowane wydarzenia (scope=current)
+export const getEvents = () => req<CityEvent[]>('/city-events');

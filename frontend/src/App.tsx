@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertItem, getAlerts, getHealth, getSensors, Health, Sensor } from './api';
+import { AlertItem, CityEvent, getAlerts, getEvents, getHealth, getSensors, Health, Sensor } from './api';
 import EventFeed from './components/EventFeed';
 import MapOverlay from './components/MapOverlay';
 import NoiseMap, { Layers } from './components/NoiseMap';
@@ -15,6 +15,7 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [events, setEvents] = useState<CityEvent[]>([]);
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -23,13 +24,19 @@ export default function App() {
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
   useEffect(() => {
-    // trzy zapytania równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
+    // cztery zapytania równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
     const load = () =>
-      Promise.all([getHealth(), getSensors(), getAlerts({ hours: filters.hours, minDb: filters.minDb || undefined })])
-        .then(([h, s, a]) => {
+      Promise.all([
+        getHealth(),
+        getSensors(),
+        getAlerts({ hours: filters.hours, minDb: filters.minDb || undefined }),
+        getEvents(),
+      ])
+        .then(([h, s, a, ev]) => {
           setHealth(h);
           setSensors(s);
           setAlerts(a);
+          setEvents(ev);
           setOffline(false);
         })
         .catch(() => setOffline(true));
@@ -68,7 +75,7 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* mapa zajmuje całą dostępną przestrzeń */}
         <div className="relative min-h-[20rem] flex-1">
-          <NoiseMap sensors={sensors} selectedId={selectedId} onSelect={selectSensor} layers={layers} />
+          <NoiseMap sensors={sensors} events={events} selectedId={selectedId} onSelect={selectSensor} layers={layers} />
           <MapOverlay layers={layers} onChange={setLayers} />
         </div>
 
