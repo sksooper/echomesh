@@ -1,4 +1,4 @@
-import type { Sensor } from '../api';
+import type { CityEvent, Sensor } from '../api';
 import { isLive, MAX_INFLUENCE_M, noiseField } from './noise-model';
 
 type Rgb = [number, number, number];
@@ -31,13 +31,16 @@ const H = 150;
 export type HeatImage = { url: string; bounds: [[number, number], [number, number]] };
 
 /** Rysuje termiczną mapę hałasu na <canvas> i zwraca ją jako obraz razem z zasięgiem geograficznym. */
-export function renderHeat(sensors: Sensor[]): HeatImage | null {
+export function renderHeat(sensors: Sensor[], events: CityEvent[] = []): HeatImage | null {
   const live = sensors.filter(isLive);
-  if (live.length === 0) return null;
+  const active = events.filter((e) => e.active);
+  // obraz obejmuje czujniki i trwające wydarzenia (wydarzenie podnosi hałas nawet bez czujnika obok)
+  const points = [...live, ...active];
+  if (points.length === 0) return null;
 
-  // zasięg obrazu = obszar czujników + margines równy zasięgowi wpływu
-  const lats = live.map((s) => s.lat);
-  const lngs = live.map((s) => s.lng);
+  // zasięg obrazu = obszar punktów + margines równy zasięgowi wpływu
+  const lats = points.map((p) => p.lat);
+  const lngs = points.map((p) => p.lng);
   const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
   const padLat = MAX_INFLUENCE_M / 111_320;
   const padLng = MAX_INFLUENCE_M / (111_320 * Math.cos((midLat * Math.PI) / 180));
@@ -58,7 +61,7 @@ export function renderHeat(sensors: Sensor[]): HeatImage | null {
       // piksel -> współrzędne geograficzne (y rośnie w dół, szerokość geograficzna w górę)
       const lat = north - ((y + 0.5) / H) * (north - south);
       const lng = west + ((x + 0.5) / W) * (east - west);
-      const { db, influence } = noiseField(lat, lng, live);
+      const { db, influence } = noiseField(lat, lng, live, active);
       const [r, g, b] = dbToRgb(db);
       const alpha = influence * influence * (3 - 2 * influence); // smoothstep: płynnie wygaszane brzegi
       const i = (y * W + x) * 4;

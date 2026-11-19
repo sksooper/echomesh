@@ -127,7 +127,7 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const heat = layers.heat ? renderHeat(sensors) : null; // warstwa wyłączona = usuwamy nakładkę
+    const heat = layers.heat ? renderHeat(sensors, events) : null; // warstwa wyłączona = usuwamy nakładkę
     if (!heat) {
       heatRef.current?.remove();
       heatRef.current = null;
@@ -139,7 +139,7 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
     } else {
       heatRef.current = L.imageOverlay(heat.url, heat.bounds, { opacity: 0.6, interactive: false }).addTo(map);
     }
-  }, [sensors, layers.heat]);
+  }, [sensors, events, layers.heat]);
 
   // 4) przełącznik warstwy czujników: pokazujemy / chowamy całą grupę znaczników
   useEffect(() => {
