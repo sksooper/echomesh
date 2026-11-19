@@ -40,6 +40,11 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 | POST | `/measurements` | nowy pomiar `{ "sensorId": 1, "dbLevel": 72.5 }` (publiczny) |
 | GET | `/measurements?sensorId=1&hours=24` | historia odczytów czujnika |
 | GET | `/alerts?hours=24&minDb=75&sensorId=2&limit=50` | strumień alertów (wszystkie filtry opcjonalne) |
+| GET | `/city-events?scope=current` | wydarzenia miejskie: `current` (trwające + zaplanowane), `active`, `all` |
+| GET | `/city-events/:id` | jedno wydarzenie |
+| POST | `/city-events` | nowe wydarzenie `{ title, startTime, endTime, lat, lng }` |
+| PATCH | `/city-events/:id` | zmiana wybranych pól (`lat` i `lng` razem) |
+| DELETE | `/city-events/:id` | usunięcie wydarzenia (204) |
 
 Walidacja: `sensorId` ≥ 1 (czujnik musi istnieć i być aktywny), `dbLevel` w zakresie 0–200.
 
@@ -64,3 +69,14 @@ Karty czujników na stronie głównej odświeżają się co 5 s. Odczyt starszy 
 - Kliknięcie czujnika na mapie lub na liście zaznacza go po obu stronach i przesuwa mapę.
 - Mapa termiczna: obraz rysowany na `<canvas>` z modelu IDW — `idw = Σ(dB/d²) / Σ(1/d²)` — zmieszanego z tłem 50 dB; wpływ czujnika wygasa płynnie do 1500 m (`lib/noise-model.ts`, `lib/heatmap.ts`).
 - Warstwy (czujniki / mapa termiczna) można wyłączać w prawym górnym rogu mapy; legenda jest w lewym dolnym rogu.
+
+## Wydarzenia miejskie (CityEvents)
+- Strefa wydarzenia to koło o promieniu `EVENT_RADIUS_M` (domyślnie 300 m) wokół punktu. Na mapie: trwające = fioletowa pełna linia, zaplanowane = szara przerywana.
+- Alert z pomiaru dostaje dopisek „(w pobliżu trwa wydarzenie: …)”, gdy czujnik leży w strefie trwającego wydarzenia (`CityEventsService.findActiveNear`, odległość w metrach przez `::geography`).
+- Model hałasu dolicza do +20 dB w środku strefy trwającego wydarzenia (malejąco do 1,5 × promienia).
+- Przykład (PowerShell):
+```powershell
+$e = '{"title":"Koncert testowy","startTime":"2026-11-20T18:00:00Z","endTime":"2026-11-20T22:00:00Z","lat":51.1100,"lng":17.0322}'
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/city-events -ContentType application/json -Body $e
+```
+- Zapis, edycja i usuwanie zostaną ograniczone do roli `admin` po dodaniu uwierzytelniania.
