@@ -14,6 +14,7 @@ export default function MapOverlay({ layers, onChange }: Props) {
   const toggles: { key: keyof Layers; label: string }[] = [
     { key: 'sensors', label: 'Czujniki' },
     { key: 'heat', label: 'Mapa termiczna' },
+    { key: 'events', label: 'Wydarzenia' },
   ];
 
   return (
@@ -43,6 +44,14 @@ export default function MapOverlay({ layers, onChange }: Props) {
         <div className="mt-2 flex items-center gap-2 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
           brak świeżych danych
+        </div>
+        <div className="mt-1 flex items-center gap-2 whitespace-nowrap">
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-violet-600 bg-violet-100" />
+          trwające wydarzenie
+        </div>
+        <div className="mt-1 flex items-center gap-2 whitespace-nowrap">
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-slate-500" />
+          zaplanowane wydarzenie
         </div>
       </div>
     </>

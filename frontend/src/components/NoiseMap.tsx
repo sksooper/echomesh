@@ -6,7 +6,7 @@ import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { formatRange, timeAgo } from '../lib/time';
 
-export type Layers = { sensors: boolean; heat: boolean };
+export type Layers = { sensors: boolean; heat: boolean; events: boolean };
 
 const WROCLAW: L.LatLngTuple = [51.1079, 17.0385];
 const TOOLTIP = { direction: 'top' as const, offset: [0, -10] as L.PointTuple };
@@ -165,6 +165,15 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
         .addTo(group);
     }
   }, [events]);
+
+  // 4c) przełącznik warstwy wydarzeń
+  useEffect(() => {
+    const map = mapRef.current;
+    const group = eventGroupRef.current;
+    if (!map || !group) return;
+    if (layers.events) group.addTo(map);
+    else group.remove();
+  }, [layers.events]);
 
   // 5) wybór czujnika (z mapy lub z listy) przesuwa mapę na ten czujnik
   useEffect(() => {

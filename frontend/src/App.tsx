@@ -19,7 +19,7 @@ export default function App() {
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true });
+  const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
