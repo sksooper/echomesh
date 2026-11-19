@@ -49,10 +49,20 @@ type Props = {
   events: CityEvent[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  selectedEventId: number | null;
+  onSelectEvent: (id: number) => void;
   layers: Layers;
 };
 
-export default function NoiseMap({ sensors, events, selectedId, onSelect, layers }: Props) {
+export default function NoiseMap({
+  sensors,
+  events,
+  selectedId,
+  onSelect,
+  selectedEventId,
+  onSelectEvent,
+  layers,
+}: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const groupRef = useRef<L.LayerGroup | null>(null);
@@ -64,6 +74,8 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
   // znaczniki powstają raz, więc handler kliknięcia czyta AKTUALNĄ funkcję z ref-a (inaczej zostałaby stara)
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onSelectEventRef = useRef(onSelectEvent);
+  onSelectEventRef.current = onSelectEvent;
 
   // 1) jednorazowa inicjalizacja mapy
   useEffect(() => {
@@ -154,17 +166,19 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
   useEffect(() => {
     const group = eventGroupRef.current;
     if (!group) return;
-    const key = events.map((e) => `${e.id}|${e.title}|${e.active}|${e.lat}|${e.lng}|${e.radiusM}`).join(';');
+    const key = events.map((e) => `${e.id}|${e.title}|${e.active}|${e.lat}|${e.lng}|${e.radiusM}|${e.id === selectedEventId}`).join(';');
     if (key === eventsKey.current) return;
     eventsKey.current = key;
 
     group.clearLayers();
     for (const e of events) {
-      L.circle([e.lat, e.lng], { radius: e.radiusM, ...(e.active ? EVENT_ACTIVE : EVENT_UPCOMING) })
+      const style = e.active ? EVENT_ACTIVE : EVENT_UPCOMING;
+      L.circle([e.lat, e.lng], { radius: e.radiusM, ...style, weight: e.id === selectedEventId ? 4 : 2 })
         .bindTooltip(eventTooltip(e), { sticky: true })
+        .on('click', () => onSelectEventRef.current(e.id))
         .addTo(group);
     }
-  }, [events]);
+  }, [events, selectedEventId]);
 
   // 4c) przełącznik warstwy wydarzeń
   useEffect(() => {
@@ -183,6 +197,14 @@ export default function NoiseMap({ sensors, events, selectedId, onSelect, layers
     // celowo tylko selectedId — nie chcemy przesuwać mapy przy każdym odświeżeniu danych
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // 6) wybór wydarzenia (z mapy lub z listy) przesuwa mapę na to wydarzenie
+  useEffect(() => {
+    const map = mapRef.current;
+    const e = events.find((x) => x.id === selectedEventId);
+    if (map && e) map.flyTo([e.lat, e.lng], Math.max(map.getZoom(), 15), { duration: 0.6 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId]);
 
   // isolate: z-index warstw Leaflet nie wychodzi poza mapę, więc legenda (z-10) zawsze jest nad nią
   return <div ref={el} className="isolate h-full w-full" />;

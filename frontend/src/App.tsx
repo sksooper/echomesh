@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AlertItem, CityEvent, getAlerts, getEvents, getHealth, getSensors, Health, Sensor } from './api';
 import EventFeed from './components/EventFeed';
+import EventList from './components/EventList';
 import MapOverlay from './components/MapOverlay';
 import NoiseMap, { Layers } from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
-type Tab = 'feed' | 'sensors';
+type Tab = 'feed' | 'sensors' | 'events';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'feed', label: 'Strumień' },
   { id: 'sensors', label: 'Czujniki' },
+  { id: 'events', label: 'Wydarzenia' },
 ];
 
 export default function App() {
@@ -19,6 +21,7 @@ export default function App() {
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
@@ -52,6 +55,12 @@ export default function App() {
     setTab('sensors');
   };
 
+  // wybór wydarzenia (strefa na mapie lub karta na liście) pokazuje zakładkę z wydarzeniami
+  const selectEvent = (id: number) => {
+    setSelectedEventId(id);
+    setTab('events');
+  };
+
   // Stan systemu w nagłówku — bez technicznych szczegółów (wersje PostGIS itp. zostają w /health)
   const ok = !offline && health?.db.up === true;
   const statusText = offline
@@ -75,7 +84,15 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* mapa zajmuje całą dostępną przestrzeń */}
         <div className="relative min-h-[20rem] flex-1">
-          <NoiseMap sensors={sensors} events={events} selectedId={selectedId} onSelect={selectSensor} layers={layers} />
+          <NoiseMap
+            sensors={sensors}
+            events={events}
+            selectedId={selectedId}
+            onSelect={selectSensor}
+            selectedEventId={selectedEventId}
+            onSelectEvent={selectEvent}
+            layers={layers}
+          />
           <MapOverlay layers={layers} onChange={setLayers} />
         </div>
 
@@ -96,11 +113,11 @@ export default function App() {
             ))}
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {tab === 'feed' ? (
+            {tab === 'feed' && (
               <EventFeed alerts={alerts} hours={filters.hours} minDb={filters.minDb} onChange={setFilters} />
-            ) : (
-              <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />
             )}
+            {tab === 'sensors' && <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />}
+            {tab === 'events' && <EventList events={events} selectedId={selectedEventId} onSelect={selectEvent} />}
           </div>
         </aside>
       </main>
