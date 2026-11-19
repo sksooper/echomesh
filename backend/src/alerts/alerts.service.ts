@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { CityEventsService } from '../city-events/city-events.service';
 import { DbService } from '../db/db.service';
+import { SensorsService } from '../sensors/sensors.service';
 import { ListAlertsQuery } from './alerts.dto';
 
 export interface AlertItem {
@@ -18,7 +20,11 @@ const COOLDOWN_SECONDS = Number(process.env.ALERT_COOLDOWN_SECONDS ?? 60);
 
 @Injectable()
 export class AlertsService {
-  constructor(private db: DbService) {}
+  constructor(
+    private db: DbService,
+    private sensors: SensorsService,
+    private events: CityEventsService,
+  ) {}
 
   /** Strumień zdarzeń: najnowsze alerty z opcjonalnymi filtrami. */
   findAll(q: ListAlertsQuery): Promise<AlertItem[]> {
@@ -61,6 +67,11 @@ export class AlertsService {
   async checkNorms(sensorId: number, level: number): Promise<boolean> {
     if (level < THRESHOLD_DB) return false;
 
+    // Kontekst: czy w pobliżu czujnika trwa wydarzenie (np. koncert)? Wtedy hałas jest "wytłumaczony".
+    const sensor = await this.sensors.findOne(sensorId);
+    const event = sensor ? await this.events.findActiveNear(sensor.lat, sensor.lng) : null;
+    const suffix = event ? ` (w pobliżu trwa wydarzenie: ${event.title})` : '';
+
     const rows = await this.db.query(
       `INSERT INTO alerts (sensor_id, level, description, source)
        SELECT $1::int, $2::numeric, $3::text, 'measurement'
@@ -71,7 +82,7 @@ export class AlertsService {
            AND created_at > now() - make_interval(secs => $4::float8)
        )
        RETURNING id`,
-      [sensorId, level, `Przekroczono próg ${THRESHOLD_DB} dB: ${level.toFixed(1)} dB`, COOLDOWN_SECONDS],
+      [sensorId, level, `Przekroczono próg ${THRESHOLD_DB} dB: ${level.toFixed(1)} dB${suffix}`, COOLDOWN_SECONDS],
     );
     return rows.length > 0;
   }

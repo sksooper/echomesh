@@ -49,6 +49,22 @@ export class CityEventsService {
     return rows[0] ? withRadius(rows[0]) : null;
   }
 
+  /**
+   * Wydarzenie trwające w chwili `at`, którego strefa obejmuje punkt (lat, lng) — najbliższe pierwsze.
+   * ::geography sprawia, że ST_DWithin liczy odległość w METRACH (na samej geometrii byłyby stopnie).
+   */
+  async findActiveNear(lat: number, lng: number, at: Date = new Date(), radiusM = EVENT_RADIUS_M): Promise<CityEvent | null> {
+    const rows = await this.db.query<Row>(
+      `${SELECT_EVENTS}
+       WHERE e.start_time <= $3 AND e.end_time >= $3
+         AND ST_DWithin(e.geometry::geography, ST_SetSRID(ST_MakePoint($2::float8, $1::float8), 4326)::geography, $4)
+       ORDER BY ST_Distance(e.geometry::geography, ST_SetSRID(ST_MakePoint($2::float8, $1::float8), 4326)::geography)
+       LIMIT 1`,
+      [lat, lng, at, radiusM],
+    );
+    return rows[0] ? withRadius(rows[0]) : null;
+  }
+
   async create(dto: CreateCityEventDto): Promise<CityEvent> {
     this.assertTimeOrder(dto.startTime, dto.endTime);
     // ST_MakePoint(długość, szerokość) — najpierw lng (X), potem lat (Y)
