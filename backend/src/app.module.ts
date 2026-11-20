@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AlertsModule } from './alerts/alerts.module';
+import { AuthModule } from './auth/auth.module';
 import { CityEventsModule } from './city-events/city-events.module';
 import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
@@ -8,6 +9,6 @@ import { SensorsModule } from './sensors/sensors.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [DbModule, HealthModule, SensorsModule, MeasurementsModule, AlertsModule, CityEventsModule, UsersModule],
+  imports: [DbModule, HealthModule, SensorsModule, MeasurementsModule, AlertsModule, CityEventsModule, UsersModule, AuthModule],
 })
 export class AppModule {}
