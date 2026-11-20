@@ -5,8 +5,9 @@ import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { MeasurementsModule } from './measurements/measurements.module';
 import { SensorsModule } from './sensors/sensors.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [DbModule, HealthModule, SensorsModule, MeasurementsModule, AlertsModule, CityEventsModule],
+  imports: [DbModule, HealthModule, SensorsModule, MeasurementsModule, AlertsModule, CityEventsModule, UsersModule],
 })
 export class AppModule {}
