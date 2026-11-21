@@ -34,7 +34,10 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 ## API (stan na v1, sesja 2)
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| GET | `/health` | stan API i bazy (wersje PostGIS / pgRouting) |
+| GET | `/health` | stan API i bazy (wersje PostGIS / pgRouting) — publiczny |
+| POST | `/auth/register` | rejestracja konta mieszkańca, zwraca `{ token, user }` — publiczny |
+| POST | `/auth/login` | logowanie, zwraca `{ token, user }` — publiczny |
+| GET | `/auth/me` | zalogowany użytkownik (przywracanie sesji) |
 | GET | `/sensors` | lista czujników z ostatnim odczytem i flagą `stale` |
 | GET | `/sensors/:id` | szczegóły jednego czujnika |
 | POST | `/measurements` | nowy pomiar `{ "sensorId": 1, "dbLevel": 72.5 }` (publiczny) |
@@ -42,9 +45,9 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 | GET | `/alerts?hours=24&minDb=75&sensorId=2&limit=50` | strumień alertów (wszystkie filtry opcjonalne) |
 | GET | `/city-events?scope=current` | wydarzenia miejskie: `current` (trwające + zaplanowane), `active`, `all` |
 | GET | `/city-events/:id` | jedno wydarzenie |
-| POST | `/city-events` | nowe wydarzenie `{ title, startTime, endTime, lat, lng }` |
-| PATCH | `/city-events/:id` | zmiana wybranych pól (`lat` i `lng` razem) |
-| DELETE | `/city-events/:id` | usunięcie wydarzenia (204) |
+| POST | `/city-events` | nowe wydarzenie `{ title, startTime, endTime, lat, lng }` — **admin** |
+| PATCH | `/city-events/:id` | zmiana wybranych pól (`lat` i `lng` razem) — **admin** |
+| DELETE | `/city-events/:id` | usunięcie wydarzenia (204) — **admin** |
 
 Walidacja: `sensorId` ≥ 1 (czujnik musi istnieć i być aktywny), `dbLevel` w zakresie 0–200.
 
@@ -79,4 +82,20 @@ Karty czujników na stronie głównej odświeżają się co 5 s. Odczyt starszy 
 $e = '{"title":"Koncert testowy","startTime":"2026-11-20T18:00:00Z","endTime":"2026-11-20T22:00:00Z","lat":51.1100,"lng":17.0322}'
 Invoke-RestMethod -Method Post -Uri http://localhost:3000/city-events -ContentType application/json -Body $e
 ```
-- Zapis, edycja i usuwanie zostaną ograniczone do roli `admin` po dodaniu uwierzytelniania.
+- Zapis, edycja i usuwanie wydarzeń: tylko rola `admin`.
+
+## Uwierzytelnianie i role
+- Rejestracja tworzy konto **mieszkańca**; hasło jest skracane algorytmem scrypt (losowa sól). Logowanie zwraca token JWT (HS256, domyślnie 8 h), który frontend wysyła w `Authorization: Bearer <token>`.
+- Globalne strażniki: `AuthGuard` (token → użytkownik z bazy, przy każdym żądaniu) i `RolesGuard`. **Każdy endpoint wymaga logowania**, chyba że ma `@Public()`: `/health`, `/auth/register`, `/auth/login` i `POST /measurements` (symulator nie ma konta).
+- Role dziedziczą uprawnienia: `admin` ⊃ `analyst` ⊃ `resident`. `@Roles('admin')` wpuszcza tylko administratora, `@Roles('analyst')` — analityka i administratora. Brak tokenu = 401, zbyt niska rola = 403.
+- Konta demonstracyjne (gdy `SEED_DEMO_USERS=true`):
+
+| Rola | E-mail | Hasło |
+|---|---|---|
+| Mieszkaniec | `mieszkaniec@echomesh.test` | `Mieszkaniec123!` |
+| Analityk | `analityk@echomesh.test` | `Analityk123!` |
+| Administrator | `admin@echomesh.test` | `Admin123!` |
+
+- Zmienne `.env`: `JWT_SECRET` (w produkcji długi, losowy ciąg), `JWT_EXPIRES_IN_SECONDS`, `SEED_DEMO_USERS`. Po zmianie: `docker compose up -d --force-recreate backend`.
+- Nadanie roli ręcznie (do czasu panelu administratora): `docker compose exec db psql -U echomesh -d echomesh -c "UPDATE users SET role='analyst' WHERE email='jan@example.com'"`.
+- Symulator nadal działa bez logowania (`POST /measurements` jest publiczny).
