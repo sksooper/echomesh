@@ -11,6 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Roles } from '../auth/decorators';
 import { CreateCityEventDto, ListEventsQuery, UpdateCityEventDto } from './city-events.dto';
 import { CityEventsService } from './city-events.service';
 
@@ -31,17 +32,20 @@ export class CityEventsController {
     return event;
   }
 
-  // Zapis / edycja / usuwanie będą ograniczone do roli admin po dodaniu uwierzytelniania (JWT + role)
+  // Zarządzanie bazą wydarzeń: tylko administrator (analityk i mieszkaniec mogą je tylko przeglądać)
+  @Roles('admin')
   @Post()
   create(@Body() dto: CreateCityEventDto) {
     return this.events.create(dto);
   }
 
+  @Roles('admin')
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCityEventDto) {
     return this.events.update(id, dto);
   }
 
+  @Roles('admin')
   @Delete(':id')
   @HttpCode(204) // sukces bez treści odpowiedzi
   remove(@Param('id', ParseIntPipe) id: number) {
