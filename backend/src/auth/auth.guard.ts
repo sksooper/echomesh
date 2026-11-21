@@ -1,7 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { User } from '../users/user.types';
 import { UsersService } from '../users/users.service';
 import { JWT_SECRET } from './config';
+import { IS_PUBLIC_KEY } from './decorators';
 import { verifyToken } from './jwt';
 
 // Minimalny kształt żądania, jakiego potrzebujemy (bez zależności od typów Express)
@@ -11,15 +13,25 @@ interface AuthedRequest {
 }
 
 /**
- * Strażnik uwierzytelniania: wymaga nagłówka `Authorization: Bearer <token>`.
+ * Globalny strażnik uwierzytelniania (APP_GUARD): wymaga nagłówka `Authorization: Bearer <token>`.
  * Użytkownika wczytujemy z bazy przy KAŻDYM żądaniu — dzięki temu usunięte konto traci dostęp od razu,
  * a zmiana roli przez administratora działa bez ponownego logowania.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private users: UsersService) {}
+  constructor(
+    private users: UsersService,
+    private reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Metadane @Public() czytamy z metody, a jeśli jej brak — z całego kontrolera
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
+
     const req = context.switchToHttp().getRequest<AuthedRequest>();
 
     const header = req.headers['authorization'];

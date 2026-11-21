@@ -1,6 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/decorators';
 import { DbService } from '../db/db.service';
 
+@Public() // sprawdzanie stanu serwera nie wymaga logowania
 @Controller('health')
 export class HealthController {
   constructor(private db: DbService) {}

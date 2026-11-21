@@ -1,4 +1,5 @@
 import { Body, Controller, DefaultValuePipe, Get, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { Public } from '../auth/decorators';
 import { CreateMeasurementDto } from './measurements.dto';
 import { MeasurementsService } from './measurements.service';
 
@@ -6,7 +7,8 @@ import { MeasurementsService } from './measurements.service';
 export class MeasurementsController {
   constructor(private measurements: MeasurementsService) {}
 
-  // Endpoint publiczny — wysyłają do niego skrypty symulatora (curl / PowerShell)
+  // Endpoint publiczny — wysyłają do niego skrypty symulatora (curl / PowerShell), które nie mają konta
+  @Public()
   @Post()
   create(@Body() dto: CreateMeasurementDto) {
     return this.measurements.create(dto);
