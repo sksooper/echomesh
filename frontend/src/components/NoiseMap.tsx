@@ -6,6 +6,8 @@ import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { formatRange, timeAgo } from '../lib/time';
 
+export type LatLngPoint = { lat: number; lng: number };
+
 export type Layers = { sensors: boolean; heat: boolean; events: boolean };
 
 const WROCLAW: L.LatLngTuple = [51.1079, 17.0385];
@@ -52,6 +54,10 @@ type Props = {
   selectedEventId: number | null;
   onSelectEvent: (id: number) => void;
   layers: Layers;
+  /** Tryb wskazywania miejsca zgłoszenia: kliknięcie na mapie wywołuje onPick. */
+  pickMode: boolean;
+  onPick: (lat: number, lng: number) => void;
+  reportPoint: LatLngPoint | null;
 };
 
 export default function NoiseMap({
@@ -62,6 +68,9 @@ export default function NoiseMap({
   selectedEventId,
   onSelectEvent,
   layers,
+  pickMode,
+  onPick,
+  reportPoint,
 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -76,6 +85,12 @@ export default function NoiseMap({
   onSelectRef.current = onSelect;
   const onSelectEventRef = useRef(onSelectEvent);
   onSelectEventRef.current = onSelectEvent;
+  // handlery mapy powstają raz, więc aktualne wartości czytają z ref-ów
+  const pickModeRef = useRef(pickMode);
+  pickModeRef.current = pickMode;
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
+  const reportMarkerRef = useRef<L.Marker | null>(null);
 
   // 1) jednorazowa inicjalizacja mapy
   useEffect(() => {
@@ -87,6 +102,10 @@ export default function NoiseMap({
     groupRef.current = L.layerGroup().addTo(map);
     eventGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    // kliknięcie w tło mapy (lub w strefę wydarzenia) wskazuje miejsce zgłoszenia — tylko w trybie wyboru
+    map.on('click', (e) => {
+      if (pickModeRef.current) onPickRef.current(e.latlng.lat, e.latlng.lng);
+    });
 
     return () => {
       map.remove();
@@ -94,6 +113,7 @@ export default function NoiseMap({
       groupRef.current = null;
       heatRef.current = null;
       eventGroupRef.current = null;
+      reportMarkerRef.current = null;
       eventsKey.current = ''; // po ponownym zamontowaniu (React StrictMode) strefy muszą się narysować na nowo
       markers.current.clear();
     };
@@ -115,7 +135,8 @@ export default function NoiseMap({
       if (!entry) {
         const marker = L.marker([s.lat, s.lng], { icon: sensorIcon(band.hex, s.stale, selected) })
           .bindTooltip(tooltip(s), TOOLTIP)
-          .on('click', () => onSelectRef.current(s.id))
+          // w trybie wyboru kliknięcie czujnika wskazuje jego lokalizację zamiast zaznaczać czujnik
+          .on('click', () => (pickModeRef.current ? onPickRef.current(s.lat, s.lng) : onSelectRef.current(s.id)))
           .addTo(group);
         markers.current.set(s.id, { marker, sig });
       } else {
@@ -175,7 +196,9 @@ export default function NoiseMap({
       const style = e.active ? EVENT_ACTIVE : EVENT_UPCOMING;
       L.circle([e.lat, e.lng], { radius: e.radiusM, ...style, weight: e.id === selectedEventId ? 4 : 2 })
         .bindTooltip(eventTooltip(e), { sticky: true })
-        .on('click', () => onSelectEventRef.current(e.id))
+        .on('click', () => {
+          if (!pickModeRef.current) onSelectEventRef.current(e.id); // w trybie wyboru klik przechodzi do mapy
+        })
         .addTo(group);
     }
   }, [events, selectedEventId]);
@@ -205,6 +228,40 @@ export default function NoiseMap({
     if (map && e) map.flyTo([e.lat, e.lng], Math.max(map.getZoom(), 15), { duration: 0.6 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId]);
+
+  // 7) kursor "celownik" w trybie wyboru miejsca
+  useEffect(() => {
+    mapRef.current?.getContainer().classList.toggle('picking', pickMode);
+  }, [pickMode]);
+
+  // 8) znacznik miejsca zgłoszenia — można go przeciągnąć, żeby poprawić położenie
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!reportPoint) {
+      reportMarkerRef.current?.remove();
+      reportMarkerRef.current = null;
+      return;
+    }
+    if (reportMarkerRef.current) {
+      reportMarkerRef.current.setLatLng([reportPoint.lat, reportPoint.lng]);
+    } else {
+      const marker = L.marker([reportPoint.lat, reportPoint.lng], {
+        draggable: true,
+        icon: L.divIcon({
+          className: 'report-pin',
+          html: '<span></span>',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        }),
+      }).addTo(map);
+      marker.on('dragend', () => {
+        const p = marker.getLatLng();
+        onPickRef.current(p.lat, p.lng);
+      });
+      reportMarkerRef.current = marker;
+    }
+  }, [reportPoint]);
 
   // isolate: z-index warstw Leaflet nie wychodzi poza mapę, więc legenda (z-10) zawsze jest nad nią
   return <div ref={el} className="isolate h-full w-full" />;

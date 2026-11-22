@@ -19,3 +19,14 @@
   from { transform: scale(1); opacity: 0.6; }
   to { transform: scale(2.8); opacity: 0; }
 }
+
+/* ===== Wybór miejsca zgłoszenia na mapie ===== */
+.report-pin { background: transparent; border: 0; }
+.report-pin span {
+  position: absolute; left: 50%; top: 50%;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  background: #4f46e5; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transform: rotate(45deg); /* romb odróżnia zgłoszenie od okrągłych czujników */
+}
+.leaflet-container.picking,
+.leaflet-container.picking .leaflet-interactive { cursor: crosshair; }

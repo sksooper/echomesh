@@ -5,7 +5,7 @@ import { AlertItem, CityEvent, getAlerts, getEvents, getHealth, getSensors, Heal
 import EventFeed from './components/EventFeed';
 import EventList from './components/EventList';
 import MapOverlay from './components/MapOverlay';
-import NoiseMap, { Layers } from './components/NoiseMap';
+import NoiseMap, { LatLngPoint, Layers } from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
 type Tab = 'feed' | 'sensors' | 'events';
@@ -25,6 +25,9 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  // miejsce zgłoszenia hałasu wskazywane na mapie (używa go okno czatu)
+  const [pickMode, setPickMode] = useState(false);
+  const [reportPoint, setReportPoint] = useState<LatLngPoint | null>(null);
   const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
@@ -109,6 +112,12 @@ export default function Dashboard() {
             selectedEventId={selectedEventId}
             onSelectEvent={selectEvent}
             layers={layers}
+            pickMode={pickMode}
+            onPick={(lat, lng) => {
+              setReportPoint({ lat, lng });
+              setPickMode(false);
+            }}
+            reportPoint={reportPoint}
           />
           <MapOverlay layers={layers} onChange={setLayers} />
         </div>
