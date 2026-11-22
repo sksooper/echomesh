@@ -49,6 +49,15 @@ export class CityEventsService {
     return rows[0] ? withRadius(rows[0]) : null;
   }
 
+  /** Wszystkie wydarzenia trwające w chwili `at` (niezależnie od miejsca) — do dopasowania po nazwie. */
+  async findActiveAt(at: Date): Promise<CityEvent[]> {
+    const rows = await this.db.query<Row>(
+      `${SELECT_EVENTS} WHERE e.start_time <= $1 AND e.end_time >= $1 ORDER BY e.start_time`,
+      [at],
+    );
+    return rows.map(withRadius);
+  }
+
   /**
    * Wydarzenie trwające w chwili `at`, którego strefa obejmuje punkt (lat, lng) — najbliższe pierwsze.
    * ::geography sprawia, że ST_DWithin liczy odległość w METRACH (na samej geometrii byłyby stopnie).
