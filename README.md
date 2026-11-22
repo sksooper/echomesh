@@ -38,6 +38,7 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 | POST | `/auth/register` | rejestracja konta mieszkańca, zwraca `{ token, user }` — publiczny |
 | POST | `/auth/login` | logowanie, zwraca `{ token, user }` — publiczny |
 | GET | `/auth/me` | zalogowany użytkownik (przywracanie sesji) |
+| POST | `/chat/report` | zgłoszenie hałasu `{ message, lat, lng }` — analiza, weryfikacja z wydarzeniami, odpowiedź chatbota |
 | GET | `/sensors` | lista czujników z ostatnim odczytem i flagą `stale` |
 | GET | `/sensors/:id` | szczegóły jednego czujnika |
 | POST | `/measurements` | nowy pomiar `{ "sensorId": 1, "dbLevel": 72.5 }` (publiczny) |
@@ -99,3 +100,17 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/city-events -ContentTy
 - Zmienne `.env`: `JWT_SECRET` (w produkcji długi, losowy ciąg), `JWT_EXPIRES_IN_SECONDS`, `SEED_DEMO_USERS`. Po zmianie: `docker compose up -d --force-recreate backend`.
 - Nadanie roli ręcznie (do czasu panelu administratora): `docker compose exec db psql -U echomesh -d echomesh -c "UPDATE users SET role='analyst' WHERE email='jan@example.com'"`.
 - Symulator nadal działa bez logowania (`POST /measurements` jest publiczny).
+
+## Zgłoszenia hałasu (chatbot)
+- Zalogowany użytkownik klika **„Zgłoś hałas”** (lewy górny róg mapy), opisuje hałas i **wskazuje miejsce na mapie** (kliknięcie albo przeciągnięcie znacznika-rombu).
+- Backend analizuje treść regułami (`chatbot/analysis.ts`, słowa kluczowe PL/EN/UA): czy to hałas, jaki typ (muzyka, remont, ruch, alarm, petardy, głosy, zwierzęta), czy na zewnątrz / w budynku, kiedy (np. „wczoraj o 22”), czy zgłoszenie jest wiarygodne (np. nie dotyczy przyszłości, nie jest „testem”), oraz dobiera 2–3 porady.
+- Weryfikacja z harmonogramem wydarzeń (`ChatbotService.verify`): najpierw **po lokalizacji** (trwające wydarzenie w promieniu `EVENT_RADIUS_M`), potem **po nazwie z treści** (`chatbot/event-matcher.ts`). Wynik zapisany w `chat_reports.status`:
+
+| Status | Znaczenie | Moderacja (`review_status`) |
+|---|---|---|
+| `planned` | hałas zaplanowany (wydarzenie), zgłoszenie odrzucone automatycznie | `none` |
+| `needs_info` | treść nie opisuje hałasu lub jest niewiarygodna — prośba o doprecyzowanie | `none` |
+| `incident` | prawdziwy incydent, czeka na analityka | `pending` |
+
+- Limit zgłoszeń: `CHAT_MAX_REPORTS_PER_HOUR` (domyślnie 10 na użytkownika; po przekroczeniu 429).
+- Zatwierdzanie przez analityka i alerty ze zgłoszeń dojdą w kolejnej sesji; pole `chat_reports.analysis` (JSONB) przechowuje szczegóły analizy.
