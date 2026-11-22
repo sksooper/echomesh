@@ -12,6 +12,19 @@ export type User = { id: number; name: string; email: string; role: Role; create
 
 export type AuthResult = { token: string; user: User };
 
+export type ReportStatus = 'incident' | 'planned' | 'needs_info';
+export type ReviewStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
+/** Odpowiedź chatbota na zgłoszenie hałasu. */
+export type ReportResult = {
+  id: number;
+  status: ReportStatus;
+  reviewStatus: ReviewStatus;
+  reply: string;
+  tips: string[];
+  matchedEvent: { id: number; title: string } | null;
+};
+
 export type SensorStatus = 'active' | 'inactive' | 'maintenance';
 
 export type Sensor = {
@@ -146,3 +159,6 @@ export const register = (name: string, email: string, password: string) =>
 
 /** Kim jestem według serwera (przywracanie sesji po odświeżeniu strony). */
 export const getMe = () => req<User>('/auth/me');
+
+export const sendReport = (message: string, lat: number, lng: number) =>
+  req<ReportResult>('/chat/report', { method: 'POST', body: JSON.stringify({ message, lat, lng }) });
