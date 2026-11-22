@@ -57,6 +57,41 @@ CREATE TABLE city_events (
 CREATE INDEX city_events_geometry_gix ON city_events USING GIST (geometry);
 CREATE INDEX city_events_time_idx ON city_events (start_time, end_time);
 
+-- ===== Zgłoszenia mieszkańców (chatbot) =====
+CREATE TABLE chat_reports (
+  id               SERIAL PRIMARY KEY,
+  user_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message          TEXT NOT NULL,
+  -- czy zgłoszenie opisuje hałas i wygląda wiarygodnie (nie "błąd ludzki")
+  is_verified      BOOLEAN NOT NULL DEFAULT false,
+  -- wynik automatycznej weryfikacji: incident (czeka na moderację), planned (zaplanowane wydarzenie), needs_info (prośba o doprecyzowanie)
+  status           VARCHAR(20) NOT NULL CHECK (status IN ('incident', 'planned', 'needs_info')),
+  location         geometry(Point, 4326) NOT NULL,
+  occurred_at      TIMESTAMPTZ NOT NULL,
+  matched_event_id INT REFERENCES city_events(id) ON DELETE SET NULL,
+  -- szczegóły analizy: typ hałasu, miejsce (na zewnątrz / w budynku), uwagi, informacja o użyciu LLM
+  analysis         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- moderacja: none (nie dotyczy), pending (czeka na analityka), approved / rejected
+  review_status    VARCHAR(20) NOT NULL DEFAULT 'none'
+                   CHECK (review_status IN ('none', 'pending', 'approved', 'rejected')),
+  reviewed_by      INT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at      TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX chat_reports_location_gix ON chat_reports USING GIST (location);
+CREATE INDEX chat_reports_user_idx ON chat_reports (user_id, created_at DESC);
+-- indeks częściowy: kolejka moderacji to tylko niewielki ułamek wszystkich zgłoszeń
+CREATE INDEX chat_reports_pending_idx ON chat_reports (created_at) WHERE review_status = 'pending';
+
+-- Alert może pochodzić ze zgłoszenia mieszkańca: wtedy nie ma czujnika, jest za to zgłoszenie i miejsce.
+ALTER TABLE alerts
+  ADD COLUMN report_id INT REFERENCES chat_reports(id) ON DELETE CASCADE,
+  ADD COLUMN location  geometry(Point, 4326),
+  ALTER COLUMN sensor_id DROP NOT NULL,
+  ADD CONSTRAINT alerts_sensor_required CHECK (source <> 'measurement' OR sensor_id IS NOT NULL);
+-- jedno zgłoszenie tworzy najwyżej jeden alert
+CREATE UNIQUE INDEX alerts_report_unique ON alerts (report_id) WHERE report_id IS NOT NULL;
+
 -- ===== Dane demonstracyjne =====
 -- Uwaga: ST_MakePoint(długość, szerokość) — najpierw lng (X), potem lat (Y).
 
