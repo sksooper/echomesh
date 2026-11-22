@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from './auth';
 import { ROLE_LABEL } from './lib/roles';
 import { AlertItem, CityEvent, getAlerts, getEvents, getHealth, getSensors, Health, Sensor } from './api';
+import ChatPanel from './components/ChatPanel';
 import EventFeed from './components/EventFeed';
 import EventList from './components/EventList';
 import MapOverlay from './components/MapOverlay';
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   // miejsce zgłoszenia hałasu wskazywane na mapie (używa go okno czatu)
+  const [chatOpen, setChatOpen] = useState(false);
   const [pickMode, setPickMode] = useState(false);
   const [reportPoint, setReportPoint] = useState<LatLngPoint | null>(null);
   const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true });
@@ -120,6 +122,14 @@ export default function Dashboard() {
             reportPoint={reportPoint}
           />
           <MapOverlay layers={layers} onChange={setLayers} />
+          <ChatPanel
+            open={chatOpen}
+            onOpenChange={setChatOpen}
+            pickMode={pickMode}
+            onPickModeChange={setPickMode}
+            reportPoint={reportPoint}
+            onClearPoint={() => setReportPoint(null)}
+          />
         </div>
 
         {/* panel boczny z zakładkami */}
