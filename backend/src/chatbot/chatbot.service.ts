@@ -3,6 +3,7 @@ import { CityEvent, CityEventsService } from '../city-events/city-events.service
 import { DbService } from '../db/db.service';
 import { User } from '../users/user.types';
 import { analyzeReport, fold, ReportAnalysis } from './analysis';
+import { ListReportsQuery } from './chatbot.dto';
 import { matchEventByName } from './event-matcher';
 import { LlmService } from './llm.service';
 
@@ -26,6 +27,36 @@ export interface ReportResult {
   reply: string;
   tips: string[];
   matchedEvent: { id: number; title: string } | null;
+}
+
+/** Zgłoszenie widziane przez jego autora („Moje zgłoszenia”). */
+export interface MyReport {
+  id: number;
+  message: string;
+  status: ReportStatus;
+  reviewStatus: ReviewStatus;
+  createdAt: Date;
+  occurredAt: Date;
+  lat: number;
+  lng: number;
+  eventTitle: string | null;
+  noiseType: string | null;
+}
+
+/** Pozycja kolejki moderacji — widzi ją tylko analityk / administrator (z treścią zgłoszenia). */
+export interface ModerationItem {
+  id: number;
+  message: string;
+  status: ReportStatus;
+  reviewStatus: ReviewStatus;
+  createdAt: Date;
+  occurredAt: Date;
+  lat: number;
+  lng: number;
+  userName: string;
+  noiseType: string | null;
+  setting: string | null;
+  usedLlm: boolean;
 }
 
 interface Verification {
@@ -167,5 +198,51 @@ export class ChatbotService {
     if (row.n >= MAX_REPORTS_PER_HOUR) {
       throw new HttpException('Too many reports, try again later', HttpStatus.TOO_MANY_REQUESTS);
     }
+  }
+
+  /** Zgłoszenia zalogowanego użytkownika (najnowsze pierwsze) wraz z nazwą dopasowanego wydarzenia. */
+  findMine(userId: number): Promise<MyReport[]> {
+    return this.db.query<MyReport>(
+      `SELECT r.id, r.message, r.status, r.review_status AS "reviewStatus",
+              r.created_at AS "createdAt", r.occurred_at AS "occurredAt",
+              ST_Y(r.location) AS lat, ST_X(r.location) AS lng,
+              e.title AS "eventTitle", r.analysis->>'noiseType' AS "noiseType"
+       FROM chat_reports r
+       LEFT JOIN city_events e ON e.id = r.matched_event_id
+       WHERE r.user_id = $1
+       ORDER BY r.created_at DESC
+       LIMIT 50`,
+      [userId],
+    );
+  }
+
+  /** Kolejka moderacji: tylko incydenty (review_status <> 'none'). Oczekujące od najstarszych, reszta od najnowszych. */
+  findForModeration(q: ListReportsQuery): Promise<ModerationItem[]> {
+    const review = q.review ?? 'pending';
+    const params: unknown[] = [];
+    let where = `r.review_status <> 'none'`;
+    if (review !== 'all') {
+      params.push(review);
+      where = `r.review_status = $1`;
+    }
+    params.push(q.limit ?? 50);
+    // review jest zwalidowane przez @IsIn, więc ASC/DESC wybieramy po stałej wartości, a nie po tekście od użytkownika
+    const order = review === 'pending' ? 'ASC' : 'DESC';
+
+    return this.db.query<ModerationItem>(
+      `SELECT r.id, r.message, r.status, r.review_status AS "reviewStatus",
+              r.created_at AS "createdAt", r.occurred_at AS "occurredAt",
+              ST_Y(r.location) AS lat, ST_X(r.location) AS lng,
+              u.name AS "userName",
+              r.analysis->>'noiseType' AS "noiseType",
+              r.analysis->>'setting' AS "setting",
+              COALESCE((r.analysis->>'usedLlm')::boolean, false) AS "usedLlm"
+       FROM chat_reports r
+       JOIN users u ON u.id = r.user_id
+       WHERE ${where}
+       ORDER BY r.created_at ${order}
+       LIMIT $${params.length}`,
+      params,
+    );
   }
 }
