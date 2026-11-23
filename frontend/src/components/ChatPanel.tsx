@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, ReportStatus, sendReport } from '../api';
 import type { LatLngPoint } from './NoiseMap';
 
@@ -15,6 +15,36 @@ const STATUS_BADGE: Record<ReportStatus, { label: string; cls: string }> = {
   planned: { label: 'Zaplanowane', cls: 'bg-violet-100 text-violet-700' },
   needs_info: { label: 'Potrzebne szczegóły', cls: 'bg-slate-100 text-slate-700' },
 };
+
+// --- Mowa: Web Speech API działa w przeglądarce (Chrome, Edge, Safari); w Firefoxie rozpoznawania mowy brak ---
+const VOICE_LANG = 'pl-PL';
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+function getRecognitionCtor(): SpeechRecognitionCtor | null {
+  const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+function speak(text: string) {
+  if (!canSpeak()) return;
+  window.speechSynthesis.cancel(); // przerywamy poprzednią wypowiedź
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = VOICE_LANG;
+  window.speechSynthesis.speak(utterance);
+}
 
 function errorText(err: unknown): string {
   if (err instanceof ApiError) {
@@ -38,6 +68,10 @@ export default function ChatPanel({ open, onOpenChange, pickMode, onPickModeChan
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speakReplies, setSpeakReplies] = useState(false);
+  const recognitionCtor = useMemo(getRecognitionCtor, []);
+  const recognition = useRef<SpeechRecognitionLike | null>(null);
   const nextId = useRef(1);
   const listEnd = useRef<HTMLDivElement>(null);
 
@@ -46,7 +80,50 @@ export default function ChatPanel({ open, onOpenChange, pickMode, onPickModeChan
     listEnd.current?.scrollIntoView({ block: 'end' });
   }, [messages, open]);
 
+  // przy zamknięciu panelu (odmontowaniu) przerywamy nasłuch i czytanie
+  useEffect(
+    () => () => {
+      recognition.current?.stop();
+      if (canSpeak()) window.speechSynthesis.cancel();
+    },
+    [],
+  );
+
   const push = (msg: Omit<Msg, 'id'>) => setMessages((m) => [...m, { ...msg, id: nextId.current++ }]);
+
+  // Mikrofon: wynik rozpoznawania dopisujemy do pola tekstowego, więc można go jeszcze poprawić przed wysłaniem
+  const toggleListening = () => {
+    if (!recognitionCtor) return;
+    if (listening) {
+      recognition.current?.stop();
+      return;
+    }
+    const rec = new recognitionCtor();
+    rec.lang = VOICE_LANG;
+    rec.interimResults = false;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(' ')
+        .trim();
+      if (transcript) setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'aborted') return;
+      push({
+        from: 'bot',
+        text:
+          e.error === 'not-allowed'
+            ? 'Brak dostępu do mikrofonu — zezwól na niego w ustawieniach przeglądarki.'
+            : 'Nie udało się rozpoznać mowy. Spróbuj ponownie.',
+      });
+    };
+    rec.onend = () => setListening(false);
+    recognition.current = rec;
+    rec.start();
+    setListening(true);
+  };
 
   const canSend = !busy && text.trim().length >= 3 && reportPoint !== null;
 
@@ -60,6 +137,7 @@ export default function ChatPanel({ open, onOpenChange, pickMode, onPickModeChan
     try {
       const result = await sendReport(message, reportPoint.lat, reportPoint.lng);
       push({ from: 'bot', text: result.reply, status: result.status, tips: result.tips });
+      if (speakReplies) speak(result.reply);
       onClearPoint(); // kolejne zgłoszenie wymaga ponownego wskazania miejsca
     } catch (err) {
       push({ from: 'bot', text: errorText(err) });
@@ -159,6 +237,28 @@ export default function ChatPanel({ open, onOpenChange, pickMode, onPickModeChan
             placeholder="Opisz hałas, np. „głośna muzyka z imprezy od 22:00”"
             className="w-full resize-none rounded border border-slate-300 px-3 py-2 text-sm"
           />
+          <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+            {recognitionCtor ? (
+              <button
+                type="button"
+                onClick={toggleListening}
+                aria-pressed={listening}
+                className={`whitespace-nowrap rounded border px-2 py-1 ${
+                  listening ? 'border-red-400 bg-red-50 text-red-700' : 'border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {listening ? 'Słucham… (zatrzymaj)' : 'Mów zamiast pisać'}
+              </button>
+            ) : (
+              <span className="whitespace-nowrap text-slate-400">Rozpoznawanie mowy niedostępne</span>
+            )}
+            {canSpeak() && (
+              <label className="flex cursor-pointer items-center gap-1 whitespace-nowrap">
+                <input type="checkbox" checked={speakReplies} onChange={(e) => setSpeakReplies(e.target.checked)} />
+                Czytaj odpowiedzi
+              </label>
+            )}
+          </div>
           <button
             type="submit"
             disabled={!canSend}

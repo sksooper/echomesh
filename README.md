@@ -39,11 +39,14 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 | POST | `/auth/login` | logowanie, zwraca `{ token, user }` — publiczny |
 | GET | `/auth/me` | zalogowany użytkownik (przywracanie sesji) |
 | POST | `/chat/report` | zgłoszenie hałasu `{ message, lat, lng }` — analiza, weryfikacja z wydarzeniami, odpowiedź chatbota |
+| GET | `/chat/reports/mine` | własne zgłoszenia użytkownika ze statusami |
+| GET | `/chat/reports?review=pending` | kolejka moderacji (z treścią zgłoszeń) — **analityk** |
+| PATCH | `/chat/reports/:id/review` | `{ decision: "approved" \| "rejected" }` — **analityk**; zatwierdzenie tworzy alert na mapie |
 | GET | `/sensors` | lista czujników z ostatnim odczytem i flagą `stale` |
 | GET | `/sensors/:id` | szczegóły jednego czujnika |
 | POST | `/measurements` | nowy pomiar `{ "sensorId": 1, "dbLevel": 72.5 }` (publiczny) |
 | GET | `/measurements?sensorId=1&hours=24` | historia odczytów czujnika |
-| GET | `/alerts?hours=24&minDb=75&sensorId=2&limit=50` | strumień alertów (wszystkie filtry opcjonalne) |
+| GET | `/alerts?hours=24&minDb=75&sensorId=2&source=report&limit=50` | strumień alertów (filtry opcjonalne; `source`: `measurement` / `report`) |
 | GET | `/city-events?scope=current` | wydarzenia miejskie: `current` (trwające + zaplanowane), `active`, `all` |
 | GET | `/city-events/:id` | jedno wydarzenie |
 | POST | `/city-events` | nowe wydarzenie `{ title, startTime, endTime, lat, lng }` — **admin** |
@@ -113,4 +116,16 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/city-events -ContentTy
 | `incident` | prawdziwy incydent, czeka na analityka | `pending` |
 
 - Limit zgłoszeń: `CHAT_MAX_REPORTS_PER_HOUR` (domyślnie 10 na użytkownika; po przekroczeniu 429).
-- Zatwierdzanie przez analityka i alerty ze zgłoszeń dojdą w kolejnej sesji; pole `chat_reports.analysis` (JSONB) przechowuje szczegóły analizy.
+- Pole `chat_reports.analysis` (JSONB) przechowuje szczegóły analizy (typ hałasu, miejsce, uwagi, `usedLlm`).
+
+### LLM (analiza zgłoszeń)
+- Gdy ustawiony jest `LLM_API_KEY`, treść analizuje model językowy (API zgodne z OpenAI, domyślnie Groq: `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS`). **Jedno zapytanie na zgłoszenie**, krótki angielski prompt, pamięć podręczna 10 min.
+- Model zwraca JSON: czy to hałas, wiarygodność, nazwa wydarzenia (z listy trwających), typ, miejsce, czas, porady. Odpowiedź jest **walidowana** (nieznane pola i wartości są odrzucane); treść zgłoszenia trafia do promptu jako dane w znaczniku `<report>`, a nie jako polecenia.
+- Bez klucza, przy timeoucie, błędzie HTTP lub niepoprawnej odpowiedzi chatbot **sam przechodzi na reguły** (tryb awaryjny) — zgłoszenia działają zawsze. Po zmianie `.env`: `docker compose up -d --force-recreate backend`.
+
+### Moderacja i alerty ze zgłoszeń
+- Zgłoszenia `incident` trafiają do kolejki (zakładka **Moderacja** dla analityka i administratora). **Zatwierdzenie** w jednej transakcji ustawia `review_status = approved` i tworzy alert `source = report` — widoczny dla wszystkich jako marker na mapie i w strumieniu zdarzeń, **bez treści zgłoszenia** (prywatność). **Odrzucenie** tylko zmienia status.
+- Mieszkaniec widzi stan swoich zgłoszeń w zakładce **Zgłoszenia** (zaplanowane / do doprecyzowania / czeka / zatwierdzone / odrzucone).
+
+### Głos
+- W oknie czatu przycisk **„Mów zamiast pisać”** (rozpoznawanie mowy, Web Speech API, `pl-PL`) i opcja **„Czytaj odpowiedzi”** (synteza mowy). Działa w przeglądarkach z obsługą Web Speech API (Chrome / Edge / Safari); w pozostałych przycisk jest ukryty.
