@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser, Roles } from '../auth/decorators';
 import { User } from '../users/user.types';
-import { CreateReportDto, ListReportsQuery } from './chatbot.dto';
+import { CreateReportDto, ListReportsQuery, ReviewReportDto } from './chatbot.dto';
 import { ChatbotService } from './chatbot.service';
 
 @Controller('chat')
@@ -25,5 +25,12 @@ export class ChatbotController {
   @Get('reports')
   list(@Query() query: ListReportsQuery) {
     return this.chatbot.findForModeration(query);
+  }
+
+  // Decyzja moderatora; zatwierdzenie tworzy alert na mapie
+  @Roles('analyst')
+  @Patch('reports/:id/review')
+  review(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number, @Body() dto: ReviewReportDto) {
+    return this.chatbot.review(user, id, dto.decision);
   }
 }

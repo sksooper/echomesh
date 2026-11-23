@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 /** Parametry zapytania GET /alerts — w URL-u wszystko jest tekstem, więc @Type zamienia na liczby. */
 export class ListAlertsQuery {
@@ -11,6 +11,9 @@ export class ListAlertsQuery {
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   sensorId?: number;
+
+  @IsOptional() @IsIn(['measurement', 'report'])
+  source?: 'measurement' | 'report'; // skąd alert: z czujnika czy ze zgłoszenia mieszkańca
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
   limit?: number = 50;

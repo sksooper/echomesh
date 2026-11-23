@@ -22,3 +22,9 @@ export class ListReportsQuery {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200)
   limit?: number = 50;
 }
+
+/** PATCH /chat/reports/:id/review */
+export class ReviewReportDto {
+  @IsIn(['approved', 'rejected'])
+  decision: 'approved' | 'rejected';
+}

@@ -1,16 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { CityEventsService } from '../city-events/city-events.service';
-import { DbService } from '../db/db.service';
+import { DbService, QueryFn } from '../db/db.service';
 import { SensorsService } from '../sensors/sensors.service';
 import { ListAlertsQuery } from './alerts.dto';
 
 export interface AlertItem {
   id: number;
-  sensorId: number;
-  sensorName: string;
+  /** null dla alertu ze zgłoszenia mieszkańca (nie ma czujnika). */
+  sensorId: number | null;
+  sensorName: string | null;
   level: number | null;
   description: string;
   source: 'measurement' | 'report';
+  reportId: number | null;
+  /** Miejsce alertu: z czujnika albo ze zgłoszenia. */
+  lat: number | null;
+  lng: number | null;
   createdAt: Date;
 }
 
@@ -40,6 +45,10 @@ export class AlertsService {
       params.push(q.sensorId);
       where.push(`a.sensor_id = $${params.length}`);
     }
+    if (q.source !== undefined) {
+      params.push(q.source);
+      where.push(`a.source = $${params.length}`);
+    }
     params.push(q.limit ?? 50);
 
     return this.db.query<AlertItem>(
@@ -49,9 +58,12 @@ export class AlertsService {
               a.level::float8 AS level,
               a.description,
               a.source,
+              a.report_id  AS "reportId",
+              COALESCE(ST_Y(a.location), ST_Y(s.location)) AS lat,
+              COALESCE(ST_X(a.location), ST_X(s.location)) AS lng,
               a.created_at AS "createdAt"
        FROM alerts a
-       JOIN sensors s ON s.id = a.sensor_id
+       LEFT JOIN sensors s ON s.id = a.sensor_id
        WHERE ${where.join(' AND ')}
        ORDER BY a.created_at DESC
        LIMIT $${params.length}`,
@@ -85,5 +97,20 @@ export class AlertsService {
       [sensorId, level, `Przekroczono próg ${THRESHOLD_DB} dB: ${level.toFixed(1)} dB${suffix}`, COOLDOWN_SECONDS],
     );
     return rows.length > 0;
+  }
+
+  /**
+   * Alert powstały po zatwierdzeniu zgłoszenia mieszkańca. Dostaje zapytanie z transakcji, żeby zmiana statusu
+   * zgłoszenia i utworzenie alertu zapisały się razem. W alercie NIE ma treści zgłoszenia (prywatność).
+   */
+  async createFromReport(
+    query: QueryFn,
+    report: { id: number; description: string; lat: number; lng: number },
+  ): Promise<void> {
+    await query(
+      `INSERT INTO alerts (sensor_id, level, description, source, report_id, location)
+       VALUES (NULL, NULL, $1, 'report', $2, ST_SetSRID(ST_MakePoint($3::float8, $4::float8), 4326))`,
+      [report.description, report.id, report.lng, report.lat],
+    );
   }
 }

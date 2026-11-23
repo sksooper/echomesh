@@ -1,10 +1,12 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { AlertsService } from '../alerts/alerts.service';
 import { CityEvent, CityEventsService } from '../city-events/city-events.service';
 import { DbService } from '../db/db.service';
 import { User } from '../users/user.types';
 import { analyzeReport, fold, ReportAnalysis } from './analysis';
 import { ListReportsQuery } from './chatbot.dto';
 import { matchEventByName } from './event-matcher';
+import { alertDescription } from './labels';
 import { LlmService } from './llm.service';
 
 // Ochrona przed zalewem zgłoszeń (a później przed kosztami zapytań do LLM)
@@ -105,6 +107,7 @@ export class ChatbotService {
     private db: DbService,
     private events: CityEventsService,
     private llm: LlmService,
+    private alerts: AlertsService,
   ) {}
 
   /** Przyjmuje zgłoszenie: analiza -> weryfikacja z wydarzeniami -> zapis -> odpowiedź chatbota. */
@@ -244,5 +247,34 @@ export class ChatbotService {
        LIMIT $${params.length}`,
       params,
     );
+  }
+
+  /**
+   * Decyzja analityka: zatwierdź / odrzuć zgłoszenie z kolejki.
+   * Zatwierdzenie tworzy alert widoczny na mapie dla wszystkich (bez treści zgłoszenia). Zmiana statusu i alert
+   * zapisują się w jednej transakcji — nie może powstać zatwierdzone zgłoszenie bez alertu.
+   */
+  review(reviewer: User, id: number, decision: 'approved' | 'rejected') {
+    return this.db.transaction(async (query) => {
+      // WHERE review_status = 'pending' sprawia, że dwie równoległe decyzje nie zadziałają obie
+      const rows = await query<{ lat: number; lng: number; noiseType: string | null }>(
+        `UPDATE chat_reports
+         SET review_status = $2, reviewed_by = $3, reviewed_at = now()
+         WHERE id = $1 AND review_status = 'pending'
+         RETURNING ST_Y(location) AS lat, ST_X(location) AS lng, analysis->>'noiseType' AS "noiseType"`,
+        [id, decision, reviewer.id],
+      );
+      if (rows.length === 0) {
+        const exists = await query('SELECT 1 FROM chat_reports WHERE id = $1', [id]);
+        if (exists.length === 0) throw new NotFoundException(`Report ${id} not found`);
+        throw new ConflictException('Report is not waiting for review');
+      }
+
+      if (decision === 'approved') {
+        const r = rows[0];
+        await this.alerts.createFromReport(query, { id, description: alertDescription(r.noiseType), lat: r.lat, lng: r.lng });
+      }
+      return { id, reviewStatus: decision };
+    });
   }
 }
