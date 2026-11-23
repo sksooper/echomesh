@@ -8,8 +8,10 @@ import {
   getEvents,
   getHealth,
   getMyReports,
+  getPendingReports,
   getSensors,
   Health,
+  ModerationItem,
   MyReport,
   Sensor,
 } from './api';
@@ -17,11 +19,12 @@ import ChatPanel from './components/ChatPanel';
 import EventFeed from './components/EventFeed';
 import EventList from './components/EventList';
 import MapOverlay from './components/MapOverlay';
+import ModerationQueue from './components/ModerationQueue';
 import MyReportsList from './components/MyReportsList';
 import NoiseMap, { LatLngPoint, Layers, MapFocus } from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
-type Tab = 'feed' | 'sensors' | 'events' | 'reports';
+type Tab = 'feed' | 'sensors' | 'events' | 'reports' | 'moderation';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'feed', label: 'Strumień' },
   { id: 'sensors', label: 'Czujniki' },
@@ -36,6 +39,8 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [events, setEvents] = useState<CityEvent[]>([]);
   const [myReports, setMyReports] = useState<MyReport[]>([]);
+  const [pending, setPending] = useState<ModerationItem[]>([]);
+  const [refresh, setRefresh] = useState(0); // zwiększenie wymusza natychmiastowe odświeżenie danych
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
@@ -49,6 +54,9 @@ export default function Dashboard() {
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
+  // moderacja: analityk i administrator (zgodnie z @Roles('analyst') na backendzie)
+  const canModerate = user !== null && user.role !== 'resident';
+
   useEffect(() => {
     // kilka zapytań równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
     const load = () =>
@@ -58,13 +66,15 @@ export default function Dashboard() {
         getAlerts({ hours: filters.hours, minDb: filters.minDb || undefined }),
         getEvents(),
         getMyReports(),
+        canModerate ? getPendingReports() : Promise.resolve<ModerationItem[]>([]),
       ])
-        .then(([h, s, a, ev, mine]) => {
+        .then(([h, s, a, ev, mine, queue]) => {
           setHealth(h);
           setSensors(s);
           setAlerts(a);
           setEvents(ev);
           setMyReports(mine);
+          setPending(queue);
           setOffline(false);
         })
         .catch(() => setOffline(true));
@@ -72,7 +82,7 @@ export default function Dashboard() {
     const id = setInterval(load, 5_000); // odświeżanie co 5 s — widać efekt działania symulatora
     // funkcja sprzątająca: zatrzymuje timer przy odmontowaniu komponentu
     return () => clearInterval(id);
-  }, [filters]); // zmiana filtrów uruchamia efekt ponownie (nowy timer i natychmiastowe odświeżenie)
+  }, [filters, refresh, canModerate]); // zmiana filtrów lub „refresh” uruchamia efekt ponownie (natychmiastowe odświeżenie)
 
   // wybór czujnika (kliknięcie na mapie lub na liście) pokazuje zakładkę z czujnikami
   const selectSensor = (id: number) => {
@@ -88,6 +98,10 @@ export default function Dashboard() {
 
   // pokazanie miejsca zgłoszenia na mapie
   const focusOn = (lat: number, lng: number) => setFocus((f) => ({ lat, lng, n: (f?.n ?? 0) + 1 }));
+
+  const tabs = canModerate
+    ? [...TABS, { id: 'moderation' as Tab, label: pending.length > 0 ? `Moderacja (${pending.length})` : 'Moderacja' }]
+    : TABS;
 
   // Stan systemu w nagłówku — bez technicznych szczegółów (wersje PostGIS itp. zostają w /health)
   const ok = !offline && health?.db.up === true;
@@ -156,7 +170,7 @@ export default function Dashboard() {
         {/* panel boczny z zakładkami */}
         <aside className="flex min-h-0 w-full flex-col border-t bg-white lg:w-96 lg:border-l lg:border-t-0">
           <nav className="flex overflow-x-auto border-b">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -176,6 +190,9 @@ export default function Dashboard() {
             {tab === 'sensors' && <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />}
             {tab === 'events' && <EventList events={events} selectedId={selectedEventId} onSelect={selectEvent} />}
             {tab === 'reports' && <MyReportsList reports={myReports} onFocus={focusOn} />}
+            {tab === 'moderation' && canModerate && (
+              <ModerationQueue items={pending} onChanged={() => setRefresh((n) => n + 1)} onFocus={focusOn} />
+            )}
           </div>
         </aside>
       </main>
