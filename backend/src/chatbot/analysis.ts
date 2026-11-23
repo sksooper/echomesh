@@ -19,6 +19,8 @@ export interface ReportAnalysis {
   setting: Setting | null;
   /** Kiedy hałas wystąpił (ISO), jeśli da się to wyczytać z treści; inaczej null = "teraz". */
   occurredAt: string | null;
+  /** Nazwa wydarzenia z listy, o którym mowa w zgłoszeniu (rozpoznaje ją LLM; reguły zwracają null). */
+  eventName: string | null;
   tips: string[];
   usedLlm: boolean;
 }
@@ -207,6 +209,7 @@ export function analyzeReport(message: string, now: Date = new Date()): ReportAn
     noiseType: isNoiseReport ? noiseType : null,
     setting,
     occurredAt: occurredAt ? occurredAt.toISOString() : null,
+    eventName: null,
     tips,
     usedLlm: false,
   };
