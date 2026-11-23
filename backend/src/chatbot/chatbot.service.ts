@@ -2,8 +2,9 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CityEvent, CityEventsService } from '../city-events/city-events.service';
 import { DbService } from '../db/db.service';
 import { User } from '../users/user.types';
-import { analyzeReport, ReportAnalysis } from './analysis';
+import { analyzeReport, fold, ReportAnalysis } from './analysis';
 import { matchEventByName } from './event-matcher';
+import { LlmService } from './llm.service';
 
 // Ochrona przed zalewem zgłoszeń (a później przed kosztami zapytań do LLM)
 const MAX_REPORTS_PER_HOUR = Number(process.env.CHAT_MAX_REPORTS_PER_HOUR ?? 10);
@@ -72,13 +73,14 @@ export class ChatbotService {
   constructor(
     private db: DbService,
     private events: CityEventsService,
+    private llm: LlmService,
   ) {}
 
   /** Przyjmuje zgłoszenie: analiza -> weryfikacja z wydarzeniami -> zapis -> odpowiedź chatbota. */
   async submit(user: User, input: ReportInput, now: Date = new Date()): Promise<ReportResult> {
     await this.assertRateLimit(user.id);
 
-    const analysis = analyzeReport(input.message, now);
+    const analysis = await this.analyze(input.message, now);
     // czas z treści ("wczoraj o 22"), ale nigdy z przyszłości
     const occurredAt = analysis.occurredAt && new Date(analysis.occurredAt) < now ? new Date(analysis.occurredAt) : now;
 
@@ -116,10 +118,29 @@ export class ChatbotService {
   }
 
   /**
+   * Analiza treści: najpierw LLM (jedno zapytanie), a gdy jest wyłączony lub zawiedzie (timeout, błąd, zła
+   * odpowiedź) — reguły. Dzięki temu chatbot działa zawsze.
+   */
+  private async analyze(message: string, now: Date): Promise<ReportAnalysis> {
+    if (this.llm.enabled) {
+      // LLM dostaje listę trwających wydarzeń, żeby rozpoznać, o które chodzi
+      const titles = (await this.events.findActiveAt(now)).map((e) => e.title);
+      const fromLlm = await this.llm.analyze(message, now, titles);
+      if (fromLlm) {
+        // model nie podał porad — dokładamy te z reguł
+        return fromLlm.isNoiseReport && fromLlm.tips.length === 0
+          ? { ...fromLlm, tips: analyzeReport(message, now).tips }
+          : fromLlm;
+      }
+    }
+    return analyzeReport(message, now);
+  }
+
+  /**
    * Krzyżowanie z harmonogramem wydarzeń:
    *  1. treść nie opisuje hałasu albo wygląda niewiarygodnie -> needs_info,
    *  2. wydarzenie trwa w pobliżu miejsca zgłoszenia -> planned,
-   *  3. wydarzenie wskazane nazwą w treści -> planned,
+   *  3. wydarzenie wskazane nazwą w treści (nazwę z listy podaje LLM, bez LLM szukamy słów z tytułu) -> planned,
    *  4. w przeciwnym razie -> incident (czeka na moderację).
    */
   private async verify(analysis: ReportAnalysis, input: ReportInput, occurredAt: Date): Promise<Verification> {
@@ -128,7 +149,11 @@ export class ChatbotService {
     const byLocation = await this.events.findActiveNear(input.lat, input.lng, occurredAt);
     if (byLocation) return { status: 'planned', event: byLocation, matchedBy: 'location' };
 
-    const byName = matchEventByName(input.message, await this.events.findActiveAt(occurredAt));
+    const active = await this.events.findActiveAt(occurredAt);
+    const named = analysis.eventName ? active.find((e) => fold(e.title) === fold(analysis.eventName as string)) : undefined;
+    if (named) return { status: 'planned', event: named, matchedBy: 'name' };
+
+    const byName = matchEventByName(input.message, active);
     if (byName) return { status: 'planned', event: byName.event, matchedBy: 'name' };
 
     return { status: 'incident', event: null, matchedBy: null };
