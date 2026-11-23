@@ -40,15 +40,54 @@ export type Sensor = {
 
 export type AlertItem = {
   id: number;
-  sensorId: number;
-  sensorName: string;
+  sensorId: number | null; // null: alert ze zgłoszenia mieszkańca (bez czujnika)
+  sensorName: string | null;
   level: number | null;
   description: string;
   source: 'measurement' | 'report';
+  reportId: number | null;
+  lat: number | null;
+  lng: number | null;
   createdAt: string; // ISO
 };
 
-export type AlertQuery = { hours?: number; minDb?: number; sensorId?: number; limit?: number };
+export type AlertQuery = {
+  hours?: number;
+  minDb?: number;
+  sensorId?: number;
+  source?: 'measurement' | 'report';
+  limit?: number;
+};
+
+/** Zgłoszenie widziane przez jego autora. */
+export type MyReport = {
+  id: number;
+  message: string;
+  status: ReportStatus;
+  reviewStatus: ReviewStatus;
+  createdAt: string;
+  occurredAt: string;
+  lat: number;
+  lng: number;
+  eventTitle: string | null;
+  noiseType: string | null;
+};
+
+/** Pozycja kolejki moderacji (z treścią zgłoszenia — widzi ją tylko analityk / administrator). */
+export type ModerationItem = {
+  id: number;
+  message: string;
+  status: ReportStatus;
+  reviewStatus: ReviewStatus;
+  createdAt: string;
+  occurredAt: string;
+  lat: number;
+  lng: number;
+  userName: string;
+  noiseType: string | null;
+  setting: string | null;
+  usedLlm: boolean;
+};
 
 export type CityEvent = {
   id: number;
@@ -162,3 +201,14 @@ export const getMe = () => req<User>('/auth/me');
 
 export const sendReport = (message: string, lat: number, lng: number) =>
   req<ReportResult>('/chat/report', { method: 'POST', body: JSON.stringify({ message, lat, lng }) });
+
+export const getMyReports = () => req<MyReport[]>('/chat/reports/mine');
+
+/** Kolejka moderacji: analityk i administrator. */
+export const getPendingReports = () => req<ModerationItem[]>('/chat/reports?review=pending');
+
+export const reviewReport = (id: number, decision: 'approved' | 'rejected') =>
+  req<{ id: number; reviewStatus: ReviewStatus }>(`/chat/reports/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify({ decision }),
+  });

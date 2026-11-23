@@ -60,7 +60,7 @@ export default function EventFeed({ alerts, hours, minDb, onChange }: Props) {
                 <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
-                    <span className="font-medium">{a.sensorName}</span>
+                    <span className="font-medium">{a.sensorName ?? 'Zgłoszenie mieszkańca'}</span>
                     <span className={`font-semibold ${sev.text}`}>
                       {a.level !== null ? a.level.toFixed(1) : '—'} dB
                     </span>

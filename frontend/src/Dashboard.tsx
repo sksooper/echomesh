@@ -1,19 +1,32 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth';
 import { ROLE_LABEL } from './lib/roles';
-import { AlertItem, CityEvent, getAlerts, getEvents, getHealth, getSensors, Health, Sensor } from './api';
+import {
+  AlertItem,
+  CityEvent,
+  getAlerts,
+  getEvents,
+  getHealth,
+  getMyReports,
+  getSensors,
+  Health,
+  MyReport,
+  Sensor,
+} from './api';
 import ChatPanel from './components/ChatPanel';
 import EventFeed from './components/EventFeed';
 import EventList from './components/EventList';
 import MapOverlay from './components/MapOverlay';
-import NoiseMap, { LatLngPoint, Layers } from './components/NoiseMap';
+import MyReportsList from './components/MyReportsList';
+import NoiseMap, { LatLngPoint, Layers, MapFocus } from './components/NoiseMap';
 import SensorList from './components/SensorList';
 
-type Tab = 'feed' | 'sensors' | 'events';
+type Tab = 'feed' | 'sensors' | 'events' | 'reports';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'feed', label: 'Strumień' },
   { id: 'sensors', label: 'Czujniki' },
   { id: 'events', label: 'Wydarzenia' },
+  { id: 'reports', label: 'Zgłoszenia' },
 ];
 
 export default function Dashboard() {
@@ -22,6 +35,8 @@ export default function Dashboard() {
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [events, setEvents] = useState<CityEvent[]>([]);
+  const [myReports, setMyReports] = useState<MyReport[]>([]);
+  const [focus, setFocus] = useState<MapFocus | null>(null);
   const [offline, setOffline] = useState(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -35,19 +50,21 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
   useEffect(() => {
-    // cztery zapytania równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
+    // kilka zapytań równolegle; jeśli któreś się nie uda, pokazujemy "brak połączenia"
     const load = () =>
       Promise.all([
         getHealth(),
         getSensors(),
         getAlerts({ hours: filters.hours, minDb: filters.minDb || undefined }),
         getEvents(),
+        getMyReports(),
       ])
-        .then(([h, s, a, ev]) => {
+        .then(([h, s, a, ev, mine]) => {
           setHealth(h);
           setSensors(s);
           setAlerts(a);
           setEvents(ev);
+          setMyReports(mine);
           setOffline(false);
         })
         .catch(() => setOffline(true));
@@ -68,6 +85,9 @@ export default function Dashboard() {
     setSelectedEventId(id);
     setTab('events');
   };
+
+  // pokazanie miejsca zgłoszenia na mapie
+  const focusOn = (lat: number, lng: number) => setFocus((f) => ({ lat, lng, n: (f?.n ?? 0) + 1 }));
 
   // Stan systemu w nagłówku — bez technicznych szczegółów (wersje PostGIS itp. zostają w /health)
   const ok = !offline && health?.db.up === true;
@@ -120,6 +140,7 @@ export default function Dashboard() {
               setPickMode(false);
             }}
             reportPoint={reportPoint}
+            focus={focus}
           />
           <MapOverlay layers={layers} onChange={setLayers} />
           <ChatPanel
@@ -134,13 +155,13 @@ export default function Dashboard() {
 
         {/* panel boczny z zakładkami */}
         <aside className="flex min-h-0 w-full flex-col border-t bg-white lg:w-96 lg:border-l lg:border-t-0">
-          <nav className="flex border-b">
+          <nav className="flex overflow-x-auto border-b">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`whitespace-nowrap px-4 py-2 text-sm font-medium ${
+                className={`whitespace-nowrap px-3 py-2 text-sm font-medium ${
                   tab === t.id ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -154,6 +175,7 @@ export default function Dashboard() {
             )}
             {tab === 'sensors' && <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />}
             {tab === 'events' && <EventList events={events} selectedId={selectedEventId} onSelect={selectEvent} />}
+            {tab === 'reports' && <MyReportsList reports={myReports} onFocus={focusOn} />}
           </div>
         </aside>
       </main>

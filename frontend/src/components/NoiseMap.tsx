@@ -7,6 +7,8 @@ import { noiseBand } from '../lib/noise';
 import { formatRange, timeAgo } from '../lib/time';
 
 export type LatLngPoint = { lat: number; lng: number };
+/** Prośba o przesunięcie mapy; `n` rośnie przy każdym kliknięciu, więc ten sam punkt można pokazać ponownie. */
+export type MapFocus = LatLngPoint & { n: number };
 
 export type Layers = { sensors: boolean; heat: boolean; events: boolean };
 
@@ -58,6 +60,7 @@ type Props = {
   pickMode: boolean;
   onPick: (lat: number, lng: number) => void;
   reportPoint: LatLngPoint | null;
+  focus: MapFocus | null;
 };
 
 export default function NoiseMap({
@@ -71,6 +74,7 @@ export default function NoiseMap({
   pickMode,
   onPick,
   reportPoint,
+  focus,
 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -262,6 +266,11 @@ export default function NoiseMap({
       reportMarkerRef.current = marker;
     }
   }, [reportPoint]);
+
+  // 9) przesunięcie mapy na wskazany punkt (np. po kliknięciu zgłoszenia na liście)
+  useEffect(() => {
+    if (focus) mapRef.current?.flyTo([focus.lat, focus.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
+  }, [focus]);
 
   // isolate: z-index warstw Leaflet nie wychodzi poza mapę, więc legenda (z-10) zawsze jest nad nią
   return <div ref={el} className="isolate h-full w-full" />;
