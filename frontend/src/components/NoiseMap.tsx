@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { CityEvent, Sensor } from '../api';
+import type { AlertItem, CityEvent, Sensor } from '../api';
 import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { formatRange, timeAgo } from '../lib/time';
@@ -10,7 +10,7 @@ export type LatLngPoint = { lat: number; lng: number };
 /** Prośba o przesunięcie mapy; `n` rośnie przy każdym kliknięciu, więc ten sam punkt można pokazać ponownie. */
 export type MapFocus = LatLngPoint & { n: number };
 
-export type Layers = { sensors: boolean; heat: boolean; events: boolean };
+export type Layers = { sensors: boolean; heat: boolean; events: boolean; reports: boolean };
 
 const WROCLAW: L.LatLngTuple = [51.1079, 17.0385];
 const TOOLTIP = { direction: 'top' as const, offset: [0, -10] as L.PointTuple };
@@ -51,6 +51,8 @@ function eventTooltip(e: CityEvent) {
 type Props = {
   sensors: Sensor[];
   events: CityEvent[];
+  /** Alerty ze zatwierdzonych zgłoszeń mieszkańców (marker na mapie, bez treści zgłoszenia). */
+  reportAlerts: AlertItem[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   selectedEventId: number | null;
@@ -66,6 +68,7 @@ type Props = {
 export default function NoiseMap({
   sensors,
   events,
+  reportAlerts,
   selectedId,
   onSelect,
   selectedEventId,
@@ -81,6 +84,8 @@ export default function NoiseMap({
   const groupRef = useRef<L.LayerGroup | null>(null);
   const heatRef = useRef<L.ImageOverlay | null>(null);
   const eventGroupRef = useRef<L.LayerGroup | null>(null);
+  const reportGroupRef = useRef<L.LayerGroup | null>(null);
+  const reportsKey = useRef('');
   const eventsKey = useRef(''); // odcisk ostatnio narysowanych wydarzeń — bez zmian nie rysujemy ich od nowa
   // id czujnika -> znacznik + "sygnatura" wyglądu (żeby nie podmieniać ikony, gdy nic się nie zmieniło)
   const markers = useRef(new Map<number, { marker: L.Marker; sig: string }>());
@@ -105,6 +110,7 @@ export default function NoiseMap({
     }).addTo(map);
     groupRef.current = L.layerGroup().addTo(map);
     eventGroupRef.current = L.layerGroup().addTo(map);
+    reportGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     // kliknięcie w tło mapy (lub w strefę wydarzenia) wskazuje miejsce zgłoszenia — tylko w trybie wyboru
     map.on('click', (e) => {
@@ -117,6 +123,8 @@ export default function NoiseMap({
       groupRef.current = null;
       heatRef.current = null;
       eventGroupRef.current = null;
+      reportGroupRef.current = null;
+      reportsKey.current = '';
       reportMarkerRef.current = null;
       eventsKey.current = ''; // po ponownym zamontowaniu (React StrictMode) strefy muszą się narysować na nowo
       markers.current.clear();
@@ -266,6 +274,36 @@ export default function NoiseMap({
       reportMarkerRef.current = marker;
     }
   }, [reportPoint]);
+
+  // 7b) markery zatwierdzonych zgłoszeń mieszkańców (kwadraty); rysujemy je od nowa tylko, gdy dane się zmienią
+  useEffect(() => {
+    const group = reportGroupRef.current;
+    if (!group) return;
+    const key = reportAlerts.map((a) => `${a.id}|${a.lat}|${a.lng}|${a.description}`).join(';');
+    if (key === reportsKey.current) return;
+    reportsKey.current = key;
+
+    group.clearLayers();
+    for (const a of reportAlerts) {
+      if (a.lat === null || a.lng === null) continue;
+      const tip = document.createElement('div');
+      tip.textContent = `${a.description} · ${timeAgo(a.createdAt)}`;
+      L.marker([a.lat, a.lng], {
+        icon: L.divIcon({ className: 'report-alert', html: '<span></span>', iconSize: [28, 28], iconAnchor: [14, 14] }),
+      })
+        .bindTooltip(tip, TOOLTIP)
+        .addTo(group);
+    }
+  }, [reportAlerts]);
+
+  // 7c) przełącznik warstwy zgłoszeń
+  useEffect(() => {
+    const map = mapRef.current;
+    const group = reportGroupRef.current;
+    if (!map || !group) return;
+    if (layers.reports) group.addTo(map);
+    else group.remove();
+  }, [layers.reports]);
 
   // 9) przesunięcie mapy na wskazany punkt (np. po kliknięciu zgłoszenia na liście)
   useEffect(() => {

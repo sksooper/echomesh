@@ -55,19 +55,24 @@ export default function EventFeed({ alerts, hours, minDb, onChange }: Props) {
         <ul className="divide-y">
           {alerts.map((a) => {
             const sev = severity(a.level);
+            const isReport = a.source === 'report'; // alert ze zatwierdzonego zgłoszenia mieszkańca
             return (
               <li key={a.id} className="flex gap-3 py-3">
-                <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
+                <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${isReport ? 'bg-pink-600' : sev.dot}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
                     <span className="font-medium">{a.sensorName ?? 'Zgłoszenie mieszkańca'}</span>
-                    <span className={`font-semibold ${sev.text}`}>
-                      {a.level !== null ? a.level.toFixed(1) : '—'} dB
-                    </span>
+                    {isReport ? (
+                      <span className="font-semibold text-pink-700">zgłoszenie</span>
+                    ) : (
+                      <span className={`font-semibold ${sev.text}`}>
+                        {a.level !== null ? a.level.toFixed(1) : '—'} dB
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-slate-500">{a.description}</p>
                   <p className="text-xs text-slate-400">
-                    {sev.label} · {timeAgo(a.createdAt)}
+                    {isReport ? 'zatwierdzone przez analityka' : sev.label} · {timeAgo(a.createdAt)}
                   </p>
                 </div>
               </li>

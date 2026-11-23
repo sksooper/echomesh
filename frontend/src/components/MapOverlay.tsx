@@ -15,6 +15,7 @@ export default function MapOverlay({ layers, onChange }: Props) {
     { key: 'sensors', label: 'Czujniki' },
     { key: 'heat', label: 'Mapa termiczna' },
     { key: 'events', label: 'Wydarzenia' },
+    { key: 'reports', label: 'Zgłoszenia' },
   ];
 
   return (
@@ -52,6 +53,10 @@ export default function MapOverlay({ layers, onChange }: Props) {
         <div className="mt-1 flex items-center gap-2 whitespace-nowrap">
           <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-slate-500" />
           zaplanowane wydarzenie
+        </div>
+        <div className="mt-1 flex items-center gap-2 whitespace-nowrap">
+          <span className="h-2.5 w-2.5 rounded-sm border-2 border-white bg-pink-600 ring-1 ring-pink-600" />
+          zgłoszenie mieszkańca
         </div>
       </div>
     </>

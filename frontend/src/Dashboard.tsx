@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [events, setEvents] = useState<CityEvent[]>([]);
+  // zatwierdzone zgłoszenia z ostatnich 6 godzin — znaczniki na mapie widoczne dla wszystkich
+  const [reportAlerts, setReportAlerts] = useState<AlertItem[]>([]);
   const [myReports, setMyReports] = useState<MyReport[]>([]);
   const [pending, setPending] = useState<ModerationItem[]>([]);
   const [refresh, setRefresh] = useState(0); // zwiększenie wymusza natychmiastowe odświeżenie danych
@@ -50,7 +52,7 @@ export default function Dashboard() {
   const [chatOpen, setChatOpen] = useState(false);
   const [pickMode, setPickMode] = useState(false);
   const [reportPoint, setReportPoint] = useState<LatLngPoint | null>(null);
-  const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true });
+  const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true, reports: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
   const [filters, setFilters] = useState({ hours: 24, minDb: 0 });
 
@@ -66,14 +68,16 @@ export default function Dashboard() {
         getAlerts({ hours: filters.hours, minDb: filters.minDb || undefined }),
         getEvents(),
         getMyReports(),
+        getAlerts({ source: 'report', hours: 6, limit: 100 }),
         canModerate ? getPendingReports() : Promise.resolve<ModerationItem[]>([]),
       ])
-        .then(([h, s, a, ev, mine, queue]) => {
+        .then(([h, s, a, ev, mine, reports, queue]) => {
           setHealth(h);
           setSensors(s);
           setAlerts(a);
           setEvents(ev);
           setMyReports(mine);
+          setReportAlerts(reports);
           setPending(queue);
           setOffline(false);
         })
@@ -143,6 +147,7 @@ export default function Dashboard() {
           <NoiseMap
             sensors={sensors}
             events={events}
+            reportAlerts={reportAlerts}
             selectedId={selectedId}
             onSelect={selectSensor}
             selectedEventId={selectedEventId}

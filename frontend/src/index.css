@@ -30,3 +30,11 @@
 }
 .leaflet-container.picking,
 .leaflet-container.picking .leaflet-interactive { cursor: crosshair; }
+
+/* ===== Zatwierdzone zgłoszenia mieszkańców na mapie ===== */
+.report-alert { background: transparent; border: 0; }
+.report-alert span {
+  position: absolute; left: 50%; top: 50%;
+  width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  background: #db2777; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
