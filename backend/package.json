@@ -5,7 +5,8 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "import:osm": "node dist/scripts/import-osm.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
