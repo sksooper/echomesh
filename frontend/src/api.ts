@@ -25,6 +25,11 @@ export type ReportResult = {
   matchedEvent: { id: number; title: string } | null;
 };
 
+export type RoutePoint = { lat: number; lng: number };
+
+/** Trasa piesza: punkty jako pary [szerokość, długość], długość w metrach, czas w minutach. */
+export type WalkRoute = { coordinates: [number, number][]; distanceM: number; durationMin: number };
+
 export type SensorStatus = 'active' | 'inactive' | 'maintenance';
 
 export type Sensor = {
@@ -212,3 +217,6 @@ export const reviewReport = (id: number, decision: 'approved' | 'rejected') =>
     method: 'PATCH',
     body: JSON.stringify({ decision }),
   });
+
+export const walkRoute = (from: RoutePoint, to: RoutePoint) =>
+  req<WalkRoute>('/routes/walk', { method: 'POST', body: JSON.stringify({ from, to }) });

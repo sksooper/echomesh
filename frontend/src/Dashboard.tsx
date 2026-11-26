@@ -14,6 +14,7 @@ import {
   ModerationItem,
   MyReport,
   Sensor,
+  WalkRoute,
 } from './api';
 import ChatPanel from './components/ChatPanel';
 import EventFeed from './components/EventFeed';
@@ -22,13 +23,17 @@ import MapOverlay from './components/MapOverlay';
 import ModerationQueue from './components/ModerationQueue';
 import MyReportsList from './components/MyReportsList';
 import NoiseMap, { LatLngPoint, Layers, MapFocus } from './components/NoiseMap';
+import RoutePlanner from './components/RoutePlanner';
 import SensorList from './components/SensorList';
 
-type Tab = 'feed' | 'sensors' | 'events' | 'reports' | 'moderation';
+type Tab = 'feed' | 'sensors' | 'events' | 'route' | 'reports' | 'moderation';
+/** Co oznacza najbliższe kliknięcie na mapie. */
+type PickTarget = 'report' | 'from' | 'to' | null;
 const TABS: { id: Tab; label: string }[] = [
   { id: 'feed', label: 'Strumień' },
   { id: 'sensors', label: 'Czujniki' },
   { id: 'events', label: 'Wydarzenia' },
+  { id: 'route', label: 'Trasa' },
   { id: 'reports', label: 'Zgłoszenia' },
 ];
 
@@ -50,7 +55,11 @@ export default function Dashboard() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   // miejsce zgłoszenia hałasu wskazywane na mapie (używa go okno czatu)
   const [chatOpen, setChatOpen] = useState(false);
-  const [pickMode, setPickMode] = useState(false);
+  // jedno miejsce decyduje, do czego służy kliknięcie na mapie: zgłoszenie hałasu albo początek / koniec trasy
+  const [pickTarget, setPickTarget] = useState<PickTarget>(null);
+  const [routeFrom, setRouteFrom] = useState<LatLngPoint | null>(null);
+  const [routeTo, setRouteTo] = useState<LatLngPoint | null>(null);
+  const [route, setRoute] = useState<WalkRoute | null>(null);
   const [reportPoint, setReportPoint] = useState<LatLngPoint | null>(null);
   const [layers, setLayers] = useState<Layers>({ sensors: true, heat: true, events: true, reports: true });
   // filtry strumienia zdarzeń; minDb = 0 oznacza "bez progu"
@@ -98,6 +107,27 @@ export default function Dashboard() {
   const selectEvent = (id: number) => {
     setSelectedEventId(id);
     setTab('events');
+  };
+
+  // Kliknięcie na mapie (lub przeciągnięcie znacznika zgłoszenia): wynik trafia tam, gdzie wskazał pickTarget
+  const handlePick = (lat: number, lng: number) => {
+    const point = { lat, lng };
+    if (pickTarget === 'from') {
+      setRouteFrom(point);
+      setRoute(null); // zmiana punktu unieważnia policzoną trasę
+    } else if (pickTarget === 'to') {
+      setRouteTo(point);
+      setRoute(null);
+    } else {
+      setReportPoint(point);
+    }
+    setPickTarget(null);
+  };
+
+  const clearRoute = () => {
+    setRouteFrom(null);
+    setRouteTo(null);
+    setRoute(null);
   };
 
   // pokazanie miejsca zgłoszenia na mapie
@@ -153,20 +183,25 @@ export default function Dashboard() {
             selectedEventId={selectedEventId}
             onSelectEvent={selectEvent}
             layers={layers}
-            pickMode={pickMode}
-            onPick={(lat, lng) => {
-              setReportPoint({ lat, lng });
-              setPickMode(false);
-            }}
+            pickMode={pickTarget !== null}
+            onPick={handlePick}
             reportPoint={reportPoint}
             focus={focus}
           />
           <MapOverlay layers={layers} onChange={setLayers} />
+          {(pickTarget === 'from' || pickTarget === 'to') && (
+            <div className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow">
+              Kliknij na mapie {pickTarget === 'from' ? 'punkt startu (A)' : 'punkt docelowy (B)'}
+              <button type="button" onClick={() => setPickTarget(null)} className="rounded border border-white/40 px-2 py-0.5 hover:bg-white/10">
+                Anuluj
+              </button>
+            </div>
+          )}
           <ChatPanel
             open={chatOpen}
             onOpenChange={setChatOpen}
-            pickMode={pickMode}
-            onPickModeChange={setPickMode}
+            pickMode={pickTarget === 'report'}
+            onPickModeChange={(pick) => setPickTarget(pick ? 'report' : null)}
             reportPoint={reportPoint}
             onClearPoint={() => setReportPoint(null)}
           />
@@ -194,6 +229,16 @@ export default function Dashboard() {
             )}
             {tab === 'sensors' && <SensorList sensors={sensors} selectedId={selectedId} onSelect={selectSensor} />}
             {tab === 'events' && <EventList events={events} selectedId={selectedEventId} onSelect={selectEvent} />}
+            {tab === 'route' && (
+              <RoutePlanner
+                from={routeFrom}
+                to={routeTo}
+                route={route}
+                onPick={setPickTarget}
+                onRoute={setRoute}
+                onClear={clearRoute}
+              />
+            )}
             {tab === 'reports' && <MyReportsList reports={myReports} onFocus={focusOn} />}
             {tab === 'moderation' && canModerate && (
               <ModerationQueue items={pending} onChanged={() => setRefresh((n) => n + 1)} onFocus={focusOn} />
