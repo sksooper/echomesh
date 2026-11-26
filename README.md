@@ -41,6 +41,7 @@ Skrypt `db/init.sql` wykonuje się tylko na pustym wolumenie — po jego zmianie
 | POST | `/chat/report` | zgłoszenie hałasu `{ message, lat, lng }` — analiza, weryfikacja z wydarzeniami, odpowiedź chatbota |
 | GET | `/chat/reports/mine` | własne zgłoszenia użytkownika ze statusami |
 | GET | `/chat/reports?review=pending` | kolejka moderacji (z treścią zgłoszeń) — **analityk** |
+| POST | `/routes/walk` | najkrótsza trasa piesza `{ from: { lat, lng }, to: { lat, lng } }` → `{ coordinates, distanceM, durationMin }` |
 | PATCH | `/chat/reports/:id/review` | `{ decision: "approved" \| "rejected" }` — **analityk**; zatwierdzenie tworzy alert na mapie |
 | GET | `/sensors` | lista czujników z ostatnim odczytem i flagą `stale` |
 | GET | `/sensors/:id` | szczegóły jednego czujnika |
@@ -129,3 +130,12 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/city-events -ContentTy
 
 ### Głos
 - W oknie czatu przycisk **„Mów zamiast pisać”** (rozpoznawanie mowy, Web Speech API, `pl-PL`) i opcja **„Czytaj odpowiedzi”** (synteza mowy). Działa w przeglądarkach z obsługą Web Speech API (Chrome / Edge / Safari); w pozostałych przycisk jest ukryty.
+
+## Trasy piesze (część 1: najkrótsza trasa)
+- **Import dróg z OpenStreetMap** (jednorazowo, wymaga internetu w kontenerze): `docker compose exec backend npm run import:osm`. Skrypt pobiera przez Overpass API drogi i ścieżki dostępne dla pieszych z obszaru `OSM_BBOX` (domyślnie centrum Wrocławia), buduje graf (`road_vertices` = węzły OSM, `road_edges` = odcinki między sąsiednimi węzłami) i zapisuje go w jednej transakcji; ponowne uruchomienie zastępuje dane. Tabele powstają w skrypcie (`IF NOT EXISTS`), więc nie trzeba kasować bazy.
+- **`POST /routes/walk`**: punkt jest „przyciągany” do najbliższego wierzchołka grafu (indeks GIST, operator `<->`; dalej niż 500 m od drogi → 400), potem `pgr_dijkstra` (pgRouting) liczy najkrótszą trasę po nieskierowanym grafie. Do algorytmu trafiają tylko krawędzie z prostokąta wokół startu i celu, więc zapytanie nie ładuje całej sieci. Czas = dystans przy 5 km/h. Brak zaimportowanych dróg → 503, brak połączenia punktów → 404.
+- Na froncie: zakładka **Trasa** — punkty A i B wskazuje się kliknięciem na mapie, wynik (dystans, czas) widać w panelu, a niebieska linia na mapie.
+- Ograniczenia v1: trasa jest najkrótsza (hałas w kosztach dojdzie w kolejnej sesji), tylko pieszo; punkt przyciągany jest do węzła, a nie do dowolnego miejsca na odcinku.
+
+## Testy jednostkowe (backend)
+- `docker compose exec backend npm test` — wbudowany runner `node:test`, bez dodatkowych zależności. Obejmuje czyste moduły: hasła, JWT, role, analizę zgłoszeń, dopasowanie wydarzeń, walidację odpowiedzi LLM, graf dróg i zapytanie Overpass (pliki `*.test.ts` obok kodu).
