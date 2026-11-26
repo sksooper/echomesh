@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { AlertItem, CityEvent, Sensor } from '../api';
+import type { AlertItem, CityEvent, Sensor, WalkRoute } from '../api';
 import { renderHeat } from '../lib/heatmap';
 import { noiseBand } from '../lib/noise';
 import { formatRange, timeAgo } from '../lib/time';
@@ -63,6 +63,10 @@ type Props = {
   onPick: (lat: number, lng: number) => void;
   reportPoint: LatLngPoint | null;
   focus: MapFocus | null;
+  /** Trasa: punkty A / B i policzona linia (null, dopóki nie wyznaczono). */
+  routeFrom: LatLngPoint | null;
+  routeTo: LatLngPoint | null;
+  route: WalkRoute | null;
 };
 
 export default function NoiseMap({
@@ -78,6 +82,9 @@ export default function NoiseMap({
   onPick,
   reportPoint,
   focus,
+  routeFrom,
+  routeTo,
+  route,
 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -100,6 +107,7 @@ export default function NoiseMap({
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
   const reportMarkerRef = useRef<L.Marker | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null); // znaczniki A / B i linia trasy
 
   // 1) jednorazowa inicjalizacja mapy
   useEffect(() => {
@@ -111,6 +119,7 @@ export default function NoiseMap({
     groupRef.current = L.layerGroup().addTo(map);
     eventGroupRef.current = L.layerGroup().addTo(map);
     reportGroupRef.current = L.layerGroup().addTo(map);
+    routeLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     // kliknięcie w tło mapy (lub w strefę wydarzenia) wskazuje miejsce zgłoszenia — tylko w trybie wyboru
     map.on('click', (e) => {
@@ -124,6 +133,7 @@ export default function NoiseMap({
       heatRef.current = null;
       eventGroupRef.current = null;
       reportGroupRef.current = null;
+      routeLayerRef.current = null;
       reportsKey.current = '';
       reportMarkerRef.current = null;
       eventsKey.current = ''; // po ponownym zamontowaniu (React StrictMode) strefy muszą się narysować na nowo
@@ -304,6 +314,27 @@ export default function NoiseMap({
     if (layers.reports) group.addTo(map);
     else group.remove();
   }, [layers.reports]);
+
+  // 10) trasa: znaczniki A / B i niebieska linia; po wyznaczeniu trasy mapa dopasowuje widok do jej przebiegu
+  useEffect(() => {
+    const layer = routeLayerRef.current;
+    const map = mapRef.current;
+    if (!layer || !map) return;
+    layer.clearLayers();
+
+    const pin = (point: LatLngPoint, letter: string, cls: string) =>
+      L.marker([point.lat, point.lng], {
+        interactive: false,
+        icon: L.divIcon({ className: `route-pin ${cls}`, html: `<span>${letter}</span>`, iconSize: [28, 28], iconAnchor: [14, 14] }),
+      }).addTo(layer);
+
+    if (route) {
+      const line = L.polyline(route.coordinates, { color: '#2563eb', weight: 5, opacity: 0.85 }).addTo(layer);
+      map.fitBounds(line.getBounds(), { padding: [48, 48] });
+    }
+    if (routeFrom) pin(routeFrom, 'A', 'route-pin-a');
+    if (routeTo) pin(routeTo, 'B', 'route-pin-b');
+  }, [routeFrom, routeTo, route]);
 
   // 9) przesunięcie mapy na wskazany punkt (np. po kliknięciu zgłoszenia na liście)
   useEffect(() => {

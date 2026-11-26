@@ -187,6 +187,9 @@ export default function Dashboard() {
             onPick={handlePick}
             reportPoint={reportPoint}
             focus={focus}
+            routeFrom={routeFrom}
+            routeTo={routeTo}
+            route={route}
           />
           <MapOverlay layers={layers} onChange={setLayers} />
           {(pickTarget === 'from' || pickTarget === 'to') && (

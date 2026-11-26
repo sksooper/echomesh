@@ -38,3 +38,14 @@
   width: 14px; height: 14px; margin: -7px 0 0 -7px;
   background: #db2777; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
+
+/* ===== Trasa: znaczniki A / B ===== */
+.route-pin { background: transparent; border: 0; }
+.route-pin span {
+  position: absolute; left: 50%; top: 50%;
+  width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border: 2px solid #fff; border-radius: 9999px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  color: #fff; font: 600 12px/18px system-ui, sans-serif; text-align: center;
+}
+.route-pin-a span { background: #16a34a; }
+.route-pin-b span { background: #dc2626; }
